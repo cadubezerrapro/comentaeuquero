@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Transmissão — comenta EU QUERO{% endblock %}
+{% block largura %}estreita{% endblock %}
+{% block content %}
+
+{% if modo == 'nova' %}
+<div class="cabeca"><div><h1>Nova transmissão</h1><p class="sub" style="margin:0;">Escolha o template, quem recebe e quando.</p></div></div>
+{% if not templates_wa %}
+<div class="aviso"><span class="dot warn"></span>Nenhum template aprovado. Crie ou sincronize em <a href="/templates">Templates</a>.</div>
+{% else %}
+<form method="post" action="/transmissoes">
+<div class="card">
+  <h2>O quê</h2>
+  <label>Nome <span class="sub">só pra você achar depois</span>
+    <input type="text" name="nome" placeholder="Convite da live de quinta"></label>
+
+  {% set n_amostra = templates_wa|selectattr('amostra')|list|length %}
+  {# busca só quando a lista é grande; exemplos da Meta ficam atrás de um link #}
+  {% set n_proprios = templates_wa|length - n_amostra %}
+  <label for="template">Template <span class="sub">só os aprovados pela Meta, separados por pasta</span></label>
+  {% if n_proprios > 8 %}<input type="search" id="busca_tpl" placeholder="Procurar template" autocomplete="off" style="margin-bottom:8px;">{% endif %}
+  <select name="template" id="template" aria-label="Template" data-amostras="{{ 1 if n_amostra and not n_proprios else 0 }}">
+    {% for nome_pasta, ts in grupos_tpl %}<optgroup label="{{ nome_pasta or 'Sem pasta' }}">
+      {% for t in ts %}<option value="{{ t.nome }}|{{ t.idioma }}" data-cat="{{ t.categoria|lower }}" data-amostra="{{ 1 if t.amostra else 0 }}"
+        data-vars="{{ t.variaveis|join(',') }}" data-corpo="{{ t.corpo }}">{{ t.nome }} ({{ t.idioma }}, {{ {'MARKETING': 'marketing', 'UTILITY': 'utilidade'}.get(t.categoria|upper, t.categoria|lower) }})</option>{% endfor %}
+    </optgroup>{% endfor %}
+  </select>
+  <p class="sub" id="sem_tpl" hidden>Nenhum template aprovado com essa busca.</p>
+  {% if n_amostra and n_proprios %}<p class="sub" style="margin-top:8px;"><a href="#" id="ver_amostras"></a></p>{% endif %}
+  <p class="msg" id="corpo" style="margin-top:12px;"></p>
+  <div id="variaveis"></div>
+</div>
+
+<div class="card">
+  <h2>Pra quem</h2>
+  <label>Público
+    <select name="publico_tipo" id="publico_tipo">
+      <option value="todos">todos com WhatsApp e consentimento</option>
+      <option value="tag">quem tem a etiqueta</option>
+      <option value="campo">quem tem o campo</option>
+    </select></label>
+  <label id="l_tag" hidden>Etiqueta
+    <select id="sel_tag">{% for tag, n in tags %}<option value="{{ tag }}">{{ tag }} ({{ n }})</option>{% endfor %}</select></label>
+  <label id="l_campo" hidden>Campo
+    <select id="sel_campo">{% for c in campos %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></label>
+  <label id="l_campo_valor" hidden>Igual a <span class="sub">vazio = qualquer valor preenchido</span>
+    <input type="text" name="campo_valor" id="campo_valor"></label>
+  <input type="hidden" name="publico_valor" id="publico_valor">
+  <p class="total-linha"><b id="total" class="num">…</b> <span class="sub">pessoas vão receber</span></p>
+  <p class="sub">Limite do número: {% if limite_diario is none %}sem limite{% else %}{{ limite_diario }} pessoas por 24h{% endif %}
+    · {{ enviados_24h }} já receberam template nas últimas 24h. Passou do limite, a fila espera.</p>
+  <p class="sub">Custo estimado: <b id="custo">…</b> (estimativa pela tabela da Meta pro Brasil; o valor real vem na fatura).</p>
+</div>
+
+<div class="card">
+  <h2>Quando</h2>
+  <label class="check"><input type="radio" name="quando" value="agora" checked> enviar agora</label>
+  <label class="check" style="margin-top:8px;"><input type="radio" name="quando" value="agendar"> agendar (horário de Brasília)</label>
+  <input type="datetime-local" name="data_hora">
+  <h2 style="margin-top:24px;">Ritmo</h2>
+  <div class="presets" data-alvo="ritmo" role="group" aria-label="Ritmo pronto">
+    <button type="button" class="chip-preset" data-valor="{{ [10, ritmo_max]|min }}">Devagar <span>{{ [10, ritmo_max]|min }}/min</span></button>
+    <button type="button" class="chip-preset" data-valor="{{ [20, ritmo_max]|min }}">Padrão <span>{{ [20, ritmo_max]|min }}/min</span></button>
+    <button type="button" class="chip-preset" data-valor="{{ [60, ritmo_max]|min }}">Rápido <span>{{ [60, ritmo_max]|min }}/min</span></button>
+  </div>
+  <label>Mensagens por minuto <span class="sub">entre {{ ritmo_min }} e {{ ritmo_max }}</span>
+    <input type="number" name="ritmo" value="20" min="{{ ritmo_min }}" max="{{ ritmo_max }}" class="campo-curto"></label>
+</div>
+
+<div class="acoes"><button type="submit">Criar transmissão</button></div>
+</form>
+
+<script>
+const precos = {{ precos|tojson }}
+const $ = (id) => document.getElementById(id)
+const opcoes = ['{primeiro_nome}', '{name}', '{username}'{% for c in campos %}, {{ ('{' ~ c ~ '}')|tojson }}{% endfor %}]
+// busca e exemplos da Meta: remonta o <select> a partir da cópia original (Safari
+// ignora <option hidden>), sem <optgroup> vazio; se o escolhido sumiu, fica o primeiro
+const tplOriginal = $('template').cloneNode(true)
+let amostras = $('template').dataset.amostras === '1'
+function filtraTpl() {
+  const q = $('busca_tpl') ? $('busca_tpl').value.trim().toLowerCase() : ''
+  if ($('ver_amostras')) $('ver_amostras').textContent = amostras ? 'esconder os exemplos da Meta' : 'mostrar os exemplos da Meta'
+  const antes = $('template').value
+  $('template').innerHTML = ''
+  for (const g of tplOriginal.querySelectorAll('optgroup')) {
+    const ok = [...g.querySelectorAll('option')].filter((o) => (amostras || o.dataset.amostra !== '1')
+      && (!q || (o.value + ' ' + o.dataset.corpo).toLowerCase().includes(q)))
+    if (!ok.length) continue
+    const ng = g.cloneNode(false)
+    for (const o of ok) ng.appendChild(o.cloneNode(true))
+    $('template').appendChild(ng)
+  }
+  const n = $('template').options.length
+  $('sem_tpl').hidden = n > 0
+  if (n && [...$('template').options].some((o) => o.value === antes)) $('template').value = antes
+  desenhaVars()
+}
+function desenhaVars() {
+  const o = $('template').selectedOptions[0]
+  if (!o) { $('corpo').textContent = ''; $('variaveis').innerHTML = ''; return conta() }
+  $('corpo').textContent = o.dataset.corpo
+  $('variaveis').innerHTML = ''
+  for (const v of (o.dataset.vars || '').split(',').filter(Boolean)) {
+    const l = document.createElement('label'); l.textContent = `Variável {{ '{{' }}${v}{{ '}}' }} `
+    const i = document.createElement('input'); i.name = `var_${v}`; i.setAttribute('list', 'opcoes_var')
+    i.placeholder = '{primeiro_nome} ou um texto fixo'
+    l.appendChild(i); $('variaveis').appendChild(l)
+  }
+  conta()
+}
+function valorPublico() {
+  const t = $('publico_tipo').value
+  $('l_tag').hidden = t !== 'tag'; $('l_campo').hidden = t !== 'campo'; $('l_campo_valor').hidden = t !== 'campo'
+  $('publico_valor').value = t === 'tag' ? $('sel_tag').value : t === 'campo' ? $('sel_campo').value : ''
+}
+let total = 0
+async function conta() {
+  valorPublico()
+  const q = new URLSearchParams({ tipo: $('publico_tipo').value, valor: $('publico_valor').value, campo_valor: $('campo_valor').value })
+  const r = await fetch('/api/wa/publico?' + q)
+  total = r.ok ? (await r.json()).total : 0
+  $('total').textContent = total
+  const cat = $('template').selectedOptions[0]?.dataset.cat
+  $('custo').textContent = 'US$ ' + (total * (precos[cat] ?? precos.marketing)).toFixed(2)
+}
+for (const id of ['template', 'publico_tipo', 'sel_tag', 'sel_campo']) $(id).addEventListener('change', id === 'template' ? desenhaVars : conta)
+$('campo_valor').addEventListener('input', conta)
+const dl = document.createElement('datalist'); dl.id = 'opcoes_var'
+for (const o of opcoes) { const op = document.createElement('option'); op.value = o; dl.appendChild(op) }
+document.body.appendChild(dl)
+if ($('busca_tpl')) $('busca_tpl').addEventListener('input', filtraTpl)
+if ($('ver_amostras')) $('ver_amostras').addEventListener('click', (e) => { e.preventDefault(); amostras = !amostras; filtraTpl() })
+filtraTpl()
+</script>
+{% endif %}
+
+{% else %}
+{% if t.status == 'enviando' %}<meta http-equiv="refresh" content="15">{% endif %}
+<div class="cabeca">
+  <div>
+    <h1>{{ t.nome }}</h1>
+    <p class="sub estado-linha" style="margin:0;">{% include "_status_transmissao.html" %} template {{ t.template }}
+      {% if t.agendada_para %}· {{ t.agendada_para|brasilia }}{% endif %} · {{ t.ritmo_por_minuto }}/min</p>
+  </div>
+</div>
+
+<div>
+  <div class="grade">
+    <div class="mini"><b class="num">{{ r.total or previsto }}</b><span>{{ 'na fila' if r.total else 'previstas' }}</span></div>
+    <div class="mini"><b class="num">{{ r.enviado }}</b><span>enviadas</span></div>
+    <div class="mini"><b class="num">{{ r.entregue }}</b><span>entregues</span></div>
+    <div class="mini"><b class="num">{{ r.lido }}</b><span>lidas</span></div>
+    <div class="mini"><b class="num">{{ r.respondido }}</b><span>responderam</span></div>
+    <div class="mini"><b class="num"{% if r.falhou %} style="color:var(--erro);"{% endif %}>{{ r.falhou }}</b><span>falharam</span></div>
+    <div class="mini"><b class="num">{{ r.pulado }}</b><span>puladas (pediram SAIR)</span></div>
+    {% if r.revisar %}<div class="mini"><b class="num" style="color:var(--aviso);">{{ r.revisar }}</b><span>a revisar (envio interrompido, pode ter chegado)</span></div>{% endif %}
+    <div class="mini"><b class="num">{{ r.pendente }}</b><span>pendentes</span></div>
+  </div>
+  <p class="sub">Custo estimado: US$ {{ '%.2f'|format(r.custo_previsto_usd) }} ({{ r.previsto }} {{ t.categoria or 'marketing' }}){% if r.custo_usd or r.por_categoria %} · cobrado até agora: US$ {{ '%.2f'|format(r.custo_usd) }}{% if r.por_categoria %} ({% for c, n in r.por_categoria.items() %}{{ n }} {{ c }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}{% endif %}. Estimativa pela tabela da Meta; o valor real vem na fatura.</p>
+  {% if r.erros_explicados %}
+  <div class="erros-meta">
+    <h2>Por que falhou</h2>
+    {% for e in r.erros_explicados %}
+    <p><code>{{ e.codigo }}</code> × {{ e.n }} · {{ e.texto }} <span class="sub">{{ e.fazer }}</span></p>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% if r.total %}
+{#- uma linha por pessoa: o que a Meta confirmou e, se falhou, por quê -#}
+{% set filtros_envio = [('', 'todos', r.total), ('entregue', 'entregues', r.entregue), ('lido', 'lidas', r.lido),
+                        ('respondido', 'responderam', r.respondido), ('sem_entrega', 'sem confirmação', r.sem_entrega),
+                        ('falhou', 'falharam', r.falhou), ('pendente', 'na fila', r.pendente + r.revisar),
+                        ('pulado', 'puladas', r.pulado)] %}
+<div class="quem" id="quem">
+  <h2>Quem recebeu</h2>
+  <div class="filtro-linha">
+    {% for chave, rot, n in filtros_envio %}{% if not chave or n %}
+    <a class="chip {{ 'ligado' if ver == chave }}" href="/transmissoes/{{ t.id }}{{ '?ver=' ~ chave if chave }}#quem">{{ rot }} <span class="n">{{ n }}</span></a>
+    {% endif %}{% endfor %}
+  </div>
+  {% if envios %}
+  <div class="twrap">
+  <table>
+    <thead><tr><th>Pessoa</th><th>WhatsApp</th><th>Situação</th><th class="num">Quando</th></tr></thead>
+    <tbody>
+    {% for e in envios %}
+    {%- if e.status == 'falhou' %}{% set dot, rot, quando = 'err', 'falhou', e.falhou_em %}
+    {%- elif e.status == 'pulado' %}{% set dot, rot, quando = 'mut', 'pulado (pediu SAIR)', '' %}
+    {%- elif e.respondido_em %}{% set dot, rot, quando = 'ok', 'respondeu', e.respondido_em %}
+    {%- elif e.lido_em %}{% set dot, rot, quando = 'ok', 'lida', e.lido_em %}
+    {%- elif e.entregue_em %}{% set dot, rot, quando = 'ok', 'entregue', e.entregue_em %}
+    {%- elif e.enviado_em %}{% set dot, rot, quando = 'warn', 'enviada, sem confirmação de entrega', e.enviado_em %}
+    {%- elif e.status == 'revisar' %}{% set dot, rot, quando = 'warn', 'a revisar (pode ter chegado)', '' %}
+    {%- elif e.adiar_ate %}{% set dot, rot, quando = 'mut', 'adiada (a pessoa recebeu muitas mensagens)', '' %}
+    {%- else %}{% set dot, rot, quando = 'mut', 'na fila', '' %}{% endif %}
+    <tr>
+      <td>{% if e.lead_id %}<b>{{ e.nome or e.username or 'sem nome' }}</b>{% else %}<span class="sub">lead apagado</span>{% endif %}</td>
+      <td>+{{ e.wa_id }}</td>
+      <td style="white-space:normal;">
+        <span class="dot {{ dot }}"></span>{{ rot }}
+        {% if e.erro_codigo %}{% set x = explicar_erro(e.erro_codigo) %}<br><span class="sub"><code>{{ x.codigo }}</code> {{ x.texto }}</span>{% endif %}
+      </td>
+      <td class="num">{{ quando|brasilia if quando else '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if envios|length >= 500 %}<p class="sub">Mostrando as primeiras 500.</p>{% endif %}
+  {% else %}
+  <p class="sub">Ninguém nesse filtro.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if t.status in ('rascunho', 'agendada', 'enviando', 'pausada') %}
+<div class="acoes">
+  {% if t.status == 'rascunho' %}<form method="post" action="/transmissoes/{{ t.id }}/disparar" onsubmit="return confirm('Disparar para {{ previsto }} pessoa(s)? As mensagens começam a sair{{ ' no horário agendado' if t.agendada_para else ' agora' }}.')"><button>Disparar</button></form>{% endif %}
+  {% if t.status == 'enviando' %}<form method="post" action="/transmissoes/{{ t.id }}/pausar"><button class="quieto">Pausar</button></form>{% endif %}
+  {% if t.status == 'pausada' %}<form method="post" action="/transmissoes/{{ t.id }}/retomar"><button>Retomar</button></form>{% endif %}
+  <form method="post" action="/transmissoes/{{ t.id }}/cancelar" onsubmit="return confirm('Cancelar esta transmissão? Quem ainda não recebeu não vai receber.')"><button class="perigo">Cancelar transmissão</button></form>
+</div>
+{% endif %}
+{% if t.status in ('agendada', 'enviando') %}
+<script>setTimeout(() => location.reload(), 15000);</script>
+{% endif %}
+{% endif %}
+<style>
+.total-linha { margin: 20px 0 8px; display: flex; align-items: baseline; gap: 8px; }
+.total-linha b { font-size: 26px; font-weight: 500; letter-spacing: -.02em; }
+.estado-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+input[type=datetime-local] { max-width: 280px; margin-top: 8px; }
+.erros-meta { margin-top: 24px; }
+.erros-meta p { font-size: 14px; margin: 8px 0; }
+.erros-meta .sub { display: block; margin-top: 2px; }
+.quem { margin-top: 32px; }
+.quem .filtro-linha { margin: 12px 0 16px; }
+</style>
+{% endblock %}

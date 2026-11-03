@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% set sem_menu = true %}
+{% block title %}Entrar — comenta EU QUERO{% endblock %}
+{% block solta %}
+<div class="caixa-login">
+  <span class="nav-marca"><span class="marca-q" aria-hidden="true"><i></i><i></i><i></i><i></i></span>comenta EU QUERO</span>
+  <h1>Entrar</h1>
+  <p class="sub" style="margin:0 0 24px;">Automação de respostas no direct.</p>
+  {% if erro %}<div class="aviso grave"><span class="dot err"></span>{{ erro }}</div>{% endif %}
+  <form method="post" action="/login">
+    {% if proximo %}<input type="hidden" name="proximo" value="{{ proximo }}">{% endif %}
+    <label>Senha do painel
+    <input type="password" name="senha" autofocus autocomplete="current-password"></label>
+    <button type="submit" class="largo" style="margin-top:20px;">Entrar</button>
+  </form>
+  <p class="sub" style="margin-top:20px;">Definida no primeiro acesso ou em <code>ADMIN_PASSWORD</code> no seu .env.</p>
+</div>
+{% endblock %}

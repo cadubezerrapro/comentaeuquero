@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Fluxos — comenta EU QUERO{% endblock %}
+{% block content %}
+
+{% if not account %}
+<div class="aviso"><span class="dot warn"></span>Conecte sua conta do Instagram no <a href="/painel">Painel</a> antes de criar fluxos.</div>
+{% else %}
+
+<div class="cabeca">
+  <div>
+    <h1>Fluxos</h1>
+    <p class="sub" style="margin:0;">Um fluxo é o caminho que a pessoa percorre depois de
+      comentar, responder um story ou mandar direct.</p>
+  </div>
+  <a class="btn" href="/editor?novo=1">Criar fluxo</a>
+</div>
+
+{% for f in fluxos %}
+<div class="card fluxo">
+  <div class="linha-topo">
+    <div class="titulo-fluxo">
+      <a href="/editor?f={{ f.id }}">{{ f.name }}</a>
+      {% if f.active %}<span class="tag ok"><span class="dot"></span>ligado</span>
+      {% else %}<span class="tag"><span class="dot"></span>pausado</span>{% endif %}
+    </div>
+    <div class="numeros">
+      <span class="num" title="entregas no direct">{{ f.entregas }}</span>
+      <span class="rot">entregas</span>
+    </div>
+  </div>
+
+  <div class="gatilhos">
+    {% if f.triggers %}
+      {% for t in f.triggers %}
+      <div class="gatilho">
+        <span class="quando">{{ t.nome }}</span>
+        {% if t.keywords %}
+          {% for k in t.keywords %}<span class="pill">{{ k }}</span>{% endfor %}
+        {% else %}
+          <span class="sub">qualquer texto</span>
+        {% endif %}
+        {% if t.media_ids %}<span class="sub">· só em {{ t.media_ids|length }} post{{ 's' if t.media_ids|length > 1 }}</span>{% endif %}
+        {% if not t.active %}<span class="sub">· desligado</span>{% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="gatilho"><span class="sub">Sem gatilho: este fluxo não começa sozinho.</span></div>
+    {% endif %}
+  </div>
+
+  <div class="rodape">
+    <span class="sub">{{ f.passos }} passo{{ 's' if f.passos != 1 }}</span>
+    {% if f.ultimo %}<span class="sub">· última entrega {{ f.ultimo }}</span>{% endif %}
+    <a class="editar link-seta" href="/editor?f={{ f.id }}">Abrir no editor <svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+  </div>
+</div>
+{% else %}
+<div class="vazio">
+  <p class="vazio-t">Nenhum fluxo ainda</p>
+  <p class="sub">Comece por um simples: alguém comenta uma palavra, recebe seu link no direct.</p>
+  <a class="btn" href="/editor?novo=1">Criar o primeiro fluxo</a>
+</div>
+{% endfor %}
+
+
+
+{% endif %}
+
+<style>
+.fluxo { padding: 20px 24px; margin-bottom: 12px; }
+.linha-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.titulo-fluxo { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; min-width: 0; }
+.titulo-fluxo a { font-size: 16px; font-weight: 600; color: var(--texto); text-decoration: none; }
+.titulo-fluxo a:hover { text-decoration: underline; text-decoration-color: var(--linha); }
+.numeros { text-align: right; flex: none; }
+.numeros .num { font-size: 26px; font-weight: 500; letter-spacing: -.02em; line-height: 1.1; display: block; }
+.numeros .rot { font-size: 13px; color: var(--suave); font-weight: 500; display: block; }
+.gatilhos { margin: 16px 0 0; border-top: 1px solid var(--linha); padding-top: 12px; }
+.gatilho { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 14px; padding: 4px 0; }
+.gatilho .pill { margin: 0; }
+.quando { color: var(--suave); margin-right: 4px; }
+.rodape { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px;
+          padding-top: 12px; border-top: 1px solid var(--linha); }
+.rodape .editar { margin-left: auto; }
+@media (max-width: 560px) { .fluxo { padding: 16px; } .numeros .num { font-size: 22px; } }
+</style>
+{% endblock %}
