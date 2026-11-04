@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.13.1 (2026-11-04)
+
+- Resposta a comentário com texto seguido de botões (ou respostas rápidas) sai numa
+  mensagem só: o texto vira o corpo dos botões. A Meta aceita uma única private reply
+  até a pessoa responder, e os botões mandados depois voltavam com code 10 / subcode
+  2534022 ("fora da janela permitida"). Por DM direta nada muda.
+
 ## 1.13.0 (2026-11-04)
 
 - **Logs do sistema** (menu, abaixo de Leads): diário completo da instância, com

@@ -849,6 +849,34 @@ def _responde_ia(data, lead, session, cortes=None):
 
 # ---------- execução ----------
 
+# limite do texto do button template / quick replies do Instagram
+LIMITE_TEXTO_BOTOES = 640
+
+
+def _junta_texto_com_botoes(flow, nodes, node_id, node):
+    """Se `node` é texto e o próximo é botões/respostas rápidas, devolve
+    (id_do_nó_de_botões, nó_de_botões_com_o_texto_na_frente). Senão, None."""
+    if node.get("type") != "text":
+        return None
+    seguinte_id = next_node_id(flow, node_id)
+    seguinte = nodes.get(seguinte_id) if seguinte_id else None
+    if not seguinte or seguinte.get("type") not in ("buttons", "quick_replies"):
+        return None
+    dados_texto = node.get("data") or {}
+    texto = str(dados_texto.get("text") or "").strip()
+    link = str(dados_texto.get("link") or "").strip()
+    if link and link not in texto:
+        texto = f"{texto}\n{link}".strip()
+    dados = dict(seguinte.get("data") or {})
+    corpo = str(dados.get("text") or "").strip()
+    junto = f"{texto}\n\n{corpo}".strip() if corpo else texto
+    if not junto or len(junto) > LIMITE_TEXTO_BOTOES:
+        return None
+    # as variações do nó de botões são do texto dele sozinho: juntas não valem
+    dados.update({"text": junto, "variants": []})
+    return seguinte_id, {**seguinte, "data": dados}
+
+
 def _recipient_para(session, lead, comment_id=None):
     """Primeira resposta a um comentário vai por private reply; o resto vai por DM."""
     if comment_id:
@@ -1001,6 +1029,16 @@ def _run(account, session_id, node_id, comment_id=None, limite_nos=40):
             node = {**node, "type": "text",
                     "data": {**data, "text": texto, "variants": [],
                              _TEXTO_PRONTO: detalhe == "ok"}}
+
+        # Resposta a comentário: a Meta aceita UMA private reply até a pessoa
+        # responder (a segunda volta com code 10 / subcode 2534022, "fora da janela
+        # permitida"). Texto seguido de botões viraria duas mensagens e os botões
+        # nunca chegariam; então o texto entra como corpo da mensagem de botões.
+        if comment_id and canal_de(session) == "ig":
+            juntou = _junta_texto_com_botoes(flow, nodes, node_id, node)
+            if juntou:
+                node_id, node = juntou
+                tipo, data = node.get("type"), node.get("data") or {}
 
         if not _dentro_da_janela(session, lead):
             desvio = _fora_da_janela(account, session_id, flow, node_id, lead)

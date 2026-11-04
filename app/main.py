@@ -119,7 +119,7 @@ def _int_env(nome, padrao=0):
 RETENCAO_LEADS_DIAS = _int_env("RETENCAO_LEADS_DIAS")
 RETENCAO_EVENTOS_DIAS = _int_env("RETENCAO_EVENTOS_DIAS")
 # Versão do produto. Sobe junto com mudança que o dono da instância percebe.
-VERSAO = "1.13.0"
+VERSAO = "1.13.1"
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
