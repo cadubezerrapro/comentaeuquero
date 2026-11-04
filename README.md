@@ -127,8 +127,8 @@ siga o [SECURITY.md](SECURITY.md). Histórico de versões em [CHANGELOG.md](CHAN
 ## Licença e origem
 
 Este repositório é mantido por [@cadubezerrapro](https://github.com/cadubezerrapro) e é
-derivado do **comenta EU QUERO**, de Cadu Bezerra, distribuído sob a Licença de Uso
-Sustentável, versão 1.0 ([LICENSE.md](LICENSE.md)). © 2026 Cadu Bezerra.
+derivado do **comenta EU QUERO**, de Augusto Gobatto, distribuído sob a Licença de Uso
+Sustentável, versão 1.0 ([LICENSE.md](LICENSE.md)). © 2026 Augusto Gobatto.
 
 Livre pra uso próprio e pra instalar pra terceiros; proibido revender como serviço
 hospedado (SaaS) sem autorização por escrito do autor original.

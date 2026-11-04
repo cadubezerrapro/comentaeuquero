@@ -28,7 +28,7 @@
 ## 1.12.0 (2026-11-03)
 
 Primeira versão deste repositório (cadubezerrapro/comentaeuquero), derivada do
-comenta EU QUERO 1.11.2 de Cadu Bezerra (Licença de Uso Sustentável 1.0).
+comenta EU QUERO 1.11.2 de Augusto Gobatto (Licença de Uso Sustentável 1.0).
 
 - Removida a ativação por `CLUB_TOKEN`: a instância não manda mais ping, versão,
   contagem de leads nem id de instalação para nenhum servidor externo. As únicas

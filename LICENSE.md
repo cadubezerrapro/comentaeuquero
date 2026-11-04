@@ -1,6 +1,6 @@
 # Licença de Uso Sustentável (Sustainable Use License)
 
-**comenta EU QUERO** — © 2026 Cadu Bezerra
+**comenta EU QUERO** — © 2026 Augusto Gobatto
 
 Versão 1.0, inspirada na Sustainable Use License do n8n.
 
