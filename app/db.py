@@ -8,7 +8,6 @@ import json
 import os
 import secrets
 import sqlite3
-import uuid
 import threading
 import time
 from pathlib import Path
