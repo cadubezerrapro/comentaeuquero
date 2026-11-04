@@ -288,6 +288,14 @@ def escolhe_variacao(data: dict, session: dict, node_id: str):
 _TEXTO_PRONTO = "_texto_pronto"
 
 
+def _detalhe(ok, base, status, corpo) -> str:
+    """Texto do evento de envio. Na falha, o motivo da Meta vai junto: sem ele o
+    painel só dizia "Falha no envio" e não havia como saber o que corrigir."""
+    if ok is False:
+        return f"{base} | erro da Meta: {instagram.resumo_erro(status, corpo)}"
+    return base
+
+
 def _enviar(account, session, node, lead, recipient):
     """Executa o envio de um nó de mensagem. Retorna (ok, detalhe)."""
     tipo = node.get("type")
@@ -321,28 +329,33 @@ def _enviar(account, session, node, lead, recipient):
         # texto que ainda não tem o link recebe o link numa linha no fim
         if link and not wa_traducao.tem_link(texto, link):   # como no WhatsApp
             texto = f"{texto}\n{link}".strip()
-        return instagram.send_text(account, recipient, texto)[0], texto[:80] + marca
+        ok, status, corpo = instagram.send_text(account, recipient, texto)
+        return ok, _detalhe(ok, texto[:80] + marca, status, corpo)
 
     if tipo == "buttons":
         botoes = [{**b, "title": render(b.get("title", ""), lead, ctx)}
                   for b in data.get("buttons", [])]
-        ok, _, corpo = instagram.send_buttons(account, recipient, texto, botoes)
+        ok, status, corpo = instagram.send_buttons(account, recipient, texto, botoes)
         # o corpo da resposta vai pro log: "ok=1" sozinho não distingue mensagem
         # entregue de mensagem aceita e engolida, que foi o que aconteceu com o
         # button template
-        return ok, f"botoes{marca} {str(corpo)[:120]}"
+        return ok, (f"botoes{marca} {str(corpo)[:120]}" if ok
+                    else _detalhe(ok, f"botoes{marca}", status, corpo))
 
     if tipo == "quick_replies":
         opcoes = [{**o, "title": render(o.get("title", ""), lead, ctx)}
                   for o in data.get("options", [])]
-        ok, _, corpo = instagram.send_quick_replies(account, recipient, texto, opcoes)
-        return ok, f"quick_replies{marca} {str(corpo)[:120]}"
+        ok, status, corpo = instagram.send_quick_replies(account, recipient, texto, opcoes)
+        return ok, (f"quick_replies{marca} {str(corpo)[:120]}" if ok
+                    else _detalhe(ok, f"quick_replies{marca}", status, corpo))
 
     if tipo == "media":
         if data.get("elements"):
-            return instagram.send_carousel(account, recipient, data["elements"])[0], "carrossel"
-        return instagram.send_media(account, recipient, data.get("url", ""),
-                                    data.get("kind", "image"))[0], "midia"
+            ok, status, corpo = instagram.send_carousel(account, recipient, data["elements"])
+            return ok, _detalhe(ok, "carrossel", status, corpo)
+        ok, status, corpo = instagram.send_media(account, recipient, data.get("url", ""),
+                                                 data.get("kind", "image"))
+        return ok, _detalhe(ok, "midia", status, corpo)
 
     return False, f"tipo desconhecido: {tipo}"
 
@@ -1022,7 +1035,7 @@ def _run(account, session_id, node_id, comment_id=None, limite_nos=40):
             continue
 
         db.log_event("fluxo_envio", account["id"], flow["name"], node.get("type", ""),
-                     ok, quem(lead), {"node": node_id, "detalhe": str(detalhe)[:200]})
+                     ok, quem(lead), {"node": node_id, "detalhe": str(detalhe)[:400]})
 
         if not ok:
             db.update_session(session_id, status="erro")

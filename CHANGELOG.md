@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.13.0 (2026-11-04)
+
+- **Logs do sistema** (menu, abaixo de Leads): diário completo da instância, com
+  filtros (só erros, envios, fluxos, webhooks, conta e acesso), busca por @, fluxo
+  ou código de erro, contador de erros nas últimas 24h, detalhe de cada evento e
+  atualização automática opcional.
+- Falha de envio agora guarda o motivo da Meta (http, code, subcode e mensagem).
+  Antes o evento de texto, mídia e carrossel só dizia "Falha no envio".
+
 ## 1.12.0 (2026-11-03)
 
 Primeira versão deste repositório (cadubezerrapro/comentaeuquero), derivada do

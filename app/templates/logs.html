@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Logs do sistema — comenta EU QUERO{% endblock %}
+{% block content %}
+
+{% macro com(g) -%}
+/logs?grupo={{ g | urlencode }}&busca={{ busca | urlencode }}
+{%- endmacro %}
+
+<div class="cabeca">
+  <div>
+    <h1>Logs do sistema</h1>
+    <p class="sub" style="margin:0;">Tudo que a instância registrou: webhooks, fluxos, mensagens entregues ou recusadas (com o motivo da Meta), conexão da conta e configurações. Horário de Brasília.</p>
+  </div>
+  <div class="resumo">
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;"><span class="num" style="{{ 'color:var(--erro)' if erros_24h }}">{{ erros_24h }}</span><span class="rot">erros nas últimas 24h</span></div>
+  </div>
+</div>
+
+<div class="filtros">
+  <form class="busca" method="get" action="/logs">
+    <input type="search" name="busca" value="{{ busca }}" placeholder="Procurar por @, fluxo, código de erro ou texto">
+    <input type="hidden" name="grupo" value="{{ grupo }}">
+    <button type="submit" class="quieto">Procurar</button>
+  </form>
+  <div class="filtro-linha">
+    <span class="rot-linha">Mostrar</span>
+    <a class="chip {{ 'ligado' if not grupo }}" href="{{ com('') }}">tudo</a>
+    <a class="chip {{ 'ligado' if grupo == 'erros' }}" href="{{ com('erros') }}">só erros</a>
+    <a class="chip {{ 'ligado' if grupo == 'envios' }}" href="{{ com('envios') }}">envios</a>
+    <a class="chip {{ 'ligado' if grupo == 'fluxos' }}" href="{{ com('fluxos') }}">fluxos</a>
+    <a class="chip {{ 'ligado' if grupo == 'webhooks' }}" href="{{ com('webhooks') }}">webhooks</a>
+    <a class="chip {{ 'ligado' if grupo == 'conta' }}" href="{{ com('conta') }}">conta e acesso</a>
+    <label class="chip" style="margin-left:auto;cursor:pointer;">
+      <input type="checkbox" id="auto" style="margin:0 6px 0 0;vertical-align:-1px;">atualizar sozinho
+    </label>
+  </div>
+</div>
+
+{% if not linhas %}
+<div class="card"><p class="sub" style="margin:0;">Nada registrado{% if grupo or busca %} com esse filtro{% endif %} ainda.</p></div>
+{% else %}
+<div class="twrap">
+<table class="logs">
+  <thead><tr><th>Quando</th><th>Evento</th><th>Status</th><th>Fluxo</th><th>Quem</th><th>Detalhe</th></tr></thead>
+  <tbody>
+  {% for l in linhas %}
+  <tr class="{{ 'linha-erro' if l.erro }}">
+    <td class="hora">{{ l.hora[8:10] }}/{{ l.hora[5:7] }} {{ l.hora[11:19] }}</td>
+    <td>{{ l.rotulo }}{% if l.origem %} <span class="sub">· {{ l.origem }}</span>{% endif %}</td>
+    <td>
+      {% if l.erro %}<span class="tag erro"><span class="dot"></span>erro</span>
+      {% elif l.ok == 1 %}<span class="tag ok"><span class="dot"></span>ok</span>
+      {% else %}<span class="tag forte">info</span>{% endif %}
+    </td>
+    <td>{{ l.fluxo }}</td>
+    <td>{% if l.quem %}@{{ l.quem }}{% endif %}</td>
+    <td class="det">
+      <details>
+        <summary>{{ l.detalhe or 'ver detalhes' }}</summary>
+        <pre>{{ l.cru }}</pre>
+      </details>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p style="margin-top:16px;display:flex;gap:12px;align-items:center;">
+  {% if antes %}<a class="chip" href="{{ com(grupo) }}">← mais recentes</a>{% endif %}
+  {% if tem_mais %}<a class="chip" href="{{ com(grupo) }}&antes={{ proximo }}">mais antigos →</a>{% endif %}
+</p>
+{% endif %}
+
+<style>
+.logs td { vertical-align: top; }
+.logs td.hora { font-variant-numeric: tabular-nums; color: var(--suave); }
+.logs td.det { white-space: normal; min-width: 280px; max-width: 560px; }
+.logs td.det details { border: 0; padding: 0; margin: 0; background: none; }
+.logs td.det summary { cursor: pointer; overflow-wrap: anywhere; }
+.logs td.det pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin: 8px 0 0;
+  padding: 10px; border-radius: 6px; background: var(--texto-4); max-height: 320px; overflow: auto; }
+.logs tr.linha-erro td { background: color-mix(in srgb, var(--erro) 5%, transparent); }
+</style>
+<script>
+(function () {
+  var c = document.getElementById('auto'), chave = 'ceq_logs_auto', t = null
+  try { c.checked = localStorage.getItem(chave) === '1' } catch (_) {}
+  function liga() {
+    clearInterval(t)
+    if (c.checked && !document.querySelector('details[open]')) t = setInterval(function () {
+      if (!document.querySelector('details[open]')) location.reload()
+    }, 10000)
+  }
+  c.addEventListener('change', function () {
+    try { localStorage.setItem(chave, c.checked ? '1' : '0') } catch (_) {}
+    liga()
+  })
+  liga()
+})()
+</script>
+{% endblock %}

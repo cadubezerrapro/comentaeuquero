@@ -26,6 +26,7 @@
 {% set I_LEADS = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' %}
 {% set I_DISPARO = '<path d="M14.5 21.7a.5.5 0 0 0 .9-.1l6.5-19a.5.5 0 0 0-.6-.6l-19 6.5a.5.5 0 0 0-.1.9l7.9 3.2a2 2 0 0 1 1.1 1.1z"/><path d="m21.9 2.1-10.9 10.9"/>' %}
 {% set I_OFICIAL = '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>' %}
+{% set I_LOGS = '<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 13h6"/><path d="M9 17h4"/>' %}
 {% set I_CONFIG = '<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>' %}
 {% macro navegacao() %}
 <div class="nav-col">
@@ -34,6 +35,7 @@
     {{ item('/painel', 'Painel', I_VISAO) }}
     {{ item('/fluxos', 'Fluxos', I_FLUXO, '/editor') }}
     {{ item('/leads', 'Leads', I_LEADS) }}
+    {{ item('/logs', 'Logs do sistema', I_LOGS) }}
     {% if wa_ativo() %}{{ item('/transmissoes', 'Transmissões', I_DISPARO) }}
     {{ item('/templates', 'Templates', I_OFICIAL) }}{% endif %}
   </nav>

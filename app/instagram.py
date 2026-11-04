@@ -480,6 +480,26 @@ def _codigo_erro(body) -> int:
     return 0
 
 
+def resumo_erro(status, body) -> str:
+    """Motivo da recusa da Meta em uma linha, pra log e tela: código, subcódigo,
+    tipo e mensagem. Nunca leva token (a Meta não devolve token no corpo de erro, e
+    texto cru de exceção passa pelo sem_segredo)."""
+    if isinstance(body, dict) and isinstance(body.get("error"), dict):
+        e = body["error"]
+        partes = [f"http {status}"]
+        if e.get("code") is not None:
+            partes.append(f"code {e.get('code')}")
+        if e.get("error_subcode"):
+            partes.append(f"subcode {e.get('error_subcode')}")
+        if e.get("type"):
+            partes.append(str(e.get("type")))
+        msg = e.get("error_user_msg") or e.get("message") or ""
+        return (" · ".join(partes) + (f": {msg}" if msg else ""))[:300]
+    if status:
+        return sem_segredo(f"http {status}: {str(body)[:200]}")[:300]
+    return sem_segredo(str(body))[:300]
+
+
 def _espera_sugerida(headers) -> float:
     """Quanto esperar, segundo a própria Meta. O header X-Business-Use-Case-Usage
     traz estimated_time_to_regain_access em MINUTOS. Sem header, cai no padrão."""

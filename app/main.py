@@ -119,7 +119,7 @@ def _int_env(nome, padrao=0):
 RETENCAO_LEADS_DIAS = _int_env("RETENCAO_LEADS_DIAS")
 RETENCAO_EVENTOS_DIAS = _int_env("RETENCAO_EVENTOS_DIAS")
 # Versão do produto. Sobe junto com mudança que o dono da instância percebe.
-VERSAO = "1.12.0"
+VERSAO = "1.13.0"
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -1344,6 +1344,131 @@ def config_teste_alerta(request: Request):
     ok = alerta.avisar("Teste de alerta do comenta EU QUERO: se você leu isso, "
                        "o vigia de rate limit sabe onde te encontrar.", sincrono=True)
     return RedirectResponse(f"/config?teste={'ok' if ok else 'falhou'}", status_code=303)
+
+
+# ---------- logs do sistema ----------
+#
+# Tudo que a instância registra em `events`, legível pra quem não abre o SQLite:
+# webhook recebido, fluxo disparado, mensagem entregue ou recusada (com o motivo
+# da Meta), conexão da conta, mudança de configuração, login. O painel mostra o
+# resumo; aqui é o diário completo, com filtro e o detalhe de cada linha.
+
+ROTULOS_LOG = {
+    "webhook": "Webhook recebido", "webhook_recusado": "Webhook recusado",
+    "webhook_sem_conta": "Webhook sem conta", "fluxo_inicio": "Fluxo iniciado",
+    "fluxo_envio": "Mensagem do fluxo", "fluxo_postback": "Clique em botão",
+    "fluxo_quick_reply": "Resposta rápida", "fluxo_resposta": "Resposta do lead",
+    "fluxo_lido": "Mensagem lida", "fluxo_split": "Divisão A/B",
+    "private_reply": "Resposta no direct", "dm_reply": "Resposta na DM",
+    "public_reply": "Resposta pública", "public_reply_pulada": "Resposta pública pulada",
+    "sem_keyword": "Sem palavra-chave", "envio_adiado": "Envio adiado",
+    "fora_da_janela": "Fora da janela de 24h", "throttle_meta": "Meta pediu pausa",
+    "oauth_ok": "Conta conectada", "oauth_erro": "Erro ao conectar",
+    "subscribe_webhooks": "Assinatura do webhook", "token_refresh": "Renovação do token",
+    "token_invalido": "Token inválido", "config_alterada": "Configuração alterada",
+    "senha_definida": "Senha definida", "login_falhou": "Login recusado",
+    "login_por_http": "Login sem HTTPS", "sessoes_revogadas": "Sessões encerradas",
+    "worker_erro": "Erro interno", "retencao": "Limpeza (LGPD)",
+    "lead_apagado": "Lead apagado", "backup_baixado": "Backup baixado",
+    "foto_perfil": "Foto de perfil", "ia_fallback": "IA usou o texto reserva",
+    "mcp_ferramenta": "Uso pelo Claude (MCP)", "mcp_acesso_autorizado": "Claude autorizado",
+}
+
+GRUPOS_LOG = {
+    "erros": None,   # filtro especial: ok=0 ou tipo de erro
+    "envios": ("fluxo_envio", "private_reply", "dm_reply", "public_reply",
+               "public_reply_pulada", "envio_adiado", "fora_da_janela", "throttle_meta"),
+    "fluxos": ("fluxo_inicio", "fluxo_postback", "fluxo_quick_reply", "fluxo_resposta",
+               "fluxo_lido", "fluxo_split", "sem_keyword"),
+    "webhooks": ("webhook", "webhook_recusado", "webhook_sem_conta", "subscribe_webhooks"),
+    "conta": ("oauth_ok", "oauth_erro", "token_refresh", "token_invalido",
+              "config_alterada", "senha_definida", "login_falhou", "login_por_http",
+              "sessoes_revogadas", "mcp_acesso_autorizado"),
+}
+_ERRO_SQL = ("(ok=0 OR kind LIKE '%erro%' OR kind LIKE '%recusad%' OR kind IN "
+             "('token_invalido','login_falhou','login_por_http','throttle_meta',"
+             "'webhook_sem_conta','fora_da_janela'))")
+
+
+def _detalhe_log(kind, payload) -> str:
+    """Uma frase do que aconteceu, tirada do payload. O cru continua disponível."""
+    if not isinstance(payload, dict):
+        return str(payload or "")[:300]
+    for chave in ("detalhe", "motivo", "erro", "resumo", "campos", "modo"):
+        v = payload.get(chave)
+        if v not in (None, "", []):
+            if isinstance(v, list):
+                v = ", ".join(str(x) for x in v)
+            return str(v)[:400]
+    if "status" in payload or "body" in payload:
+        corpo = payload.get("body")
+        if isinstance(corpo, dict) and corpo.get("error"):
+            return instagram.resumo_erro(payload.get("status"), corpo)
+        return f"http {payload.get('status')}"
+    return ""
+
+
+@app.get("/logs")
+def logs_page(request: Request, grupo: str = "", busca: str = "", antes: int = 0):
+    guard = require_login(request)
+    if guard:
+        return guard
+    account = db.first_account()
+    grupo = grupo if grupo in GRUPOS_LOG else ""
+    por_pagina = 100
+    sql = ("SELECT id, datetime(ts, '-3 hours') AS hora, kind, rule_keyword, source, ok, "
+           "who, payload FROM events WHERE 1=1")
+    args = []
+    if account:
+        sql += " AND (account_id=? OR account_id IS NULL)"
+        args.append(account["id"])
+    if grupo == "erros":
+        sql += " AND " + _ERRO_SQL
+    elif grupo:
+        kinds = GRUPOS_LOG[grupo]
+        sql += f" AND kind IN ({','.join('?' * len(kinds))})"
+        args += list(kinds)
+    if busca.strip():
+        alvo = f"%{busca.strip().lower()}%"
+        sql += (" AND (LOWER(payload) LIKE ? OR LOWER(who) LIKE ? OR LOWER(kind) LIKE ?"
+                " OR LOWER(rule_keyword) LIKE ?)")
+        args += [alvo] * 4
+    if antes > 0:
+        sql += " AND id < ?"
+        args.append(antes)
+    sql += " ORDER BY id DESC LIMIT ?"
+    args.append(por_pagina + 1)
+    linhas = []
+    for r in db.conn().execute(sql, args).fetchall():
+        try:
+            payload = json.loads(r["payload"]) if r["payload"] else {}
+        except (TypeError, ValueError):
+            payload = r["payload"]
+        erro = (r["ok"] == 0 or "erro" in r["kind"] or "recusad" in r["kind"]
+                or r["kind"] in ("token_invalido", "login_falhou", "login_por_http",
+                                 "throttle_meta", "webhook_sem_conta", "fora_da_janela"))
+        linhas.append({
+            "id": r["id"], "hora": r["hora"] or "", "kind": r["kind"],
+            "rotulo": ROTULOS_LOG.get(r["kind"], r["kind"].replace("_", " ")),
+            "fluxo": r["rule_keyword"] or "", "origem": r["source"] or "",
+            "quem": r["who"] or "", "ok": r["ok"], "erro": erro,
+            "detalhe": _detalhe_log(r["kind"], payload),
+            "cru": json.dumps(payload, ensure_ascii=False, indent=2)
+                   if isinstance(payload, (dict, list)) else str(payload or ""),
+        })
+    tem_mais = len(linhas) > por_pagina
+    linhas = linhas[:por_pagina]
+    base_erros = "SELECT COUNT(*) FROM events WHERE ts >= datetime('now','-1 day') AND " + _ERRO_SQL
+    arg_erros = []
+    if account:
+        base_erros += " AND (account_id=? OR account_id IS NULL)"
+        arg_erros.append(account["id"])
+    erros_24h = db.conn().execute(base_erros, arg_erros).fetchone()[0]
+    return templates.TemplateResponse(request, "logs.html", {
+        "account": account, "linhas": linhas, "grupo": grupo, "busca": busca,
+        "tem_mais": tem_mais, "proximo": linhas[-1]["id"] if linhas else 0,
+        "erros_24h": erros_24h, "antes": antes,
+    })
 
 
 @app.get("/leads")
