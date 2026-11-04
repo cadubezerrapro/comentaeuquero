@@ -22,14 +22,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY --from=editor /editor-dist ./app/static/editor
 
-# Roda como usuário comum, não root: se alguém achar uma falha no app, não ganha a
-# máquina de brinde. O volume /data nasce com o dono certo.
+# O app roda como usuário comum, não root: se alguém achar uma falha, não ganha a
+# máquina de brinde. O entrypoint acerta o dono de /data (que chega montado como
+# root) e troca pro `ceq` antes de subir o app.
+# Sem a instrução de volume do Docker: quem cria o disco é o docker-compose (volume ceq_data) ou a
+# plataforma (a Railway recusa Dockerfile que declara volume).
 RUN useradd --system --uid 10001 --home-dir /srv/app ceq \
     && mkdir -p /data && chown -R ceq:ceq /data /srv/app
-USER ceq
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 ENV DATA_DIR=/data
-VOLUME ["/data"]
 EXPOSE 8080
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
