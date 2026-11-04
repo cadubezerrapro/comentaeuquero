@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.14.0 (2026-11-04)
+
+- Modais e dropdowns no estilo do painel, no painel e no editor de fluxos. Saem a
+  janela cinza do navegador (confirmar, perguntar nome, avisar) e o menu nativo
+  dos campos de seleção. Os modais têm fundo desfocado, foco preso, Esc e Enter;
+  ações destrutivas aparecem em vermelho. Os dropdowns abrem pra cima quando falta
+  espaço, aceitam teclado (setas, Enter, Esc, digitar a inicial) e respeitam tema
+  claro e escuro. Um arquivo só: `app/static/ceq-ui.js`.
+
 ## 1.13.1 (2026-11-04)
 
 - Resposta a comentário com texto seguido de botões (ou respostas rápidas) sai numa

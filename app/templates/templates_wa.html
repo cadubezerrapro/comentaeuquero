@@ -148,7 +148,7 @@ $('corpo').addEventListener('input', desenha)
 $('botoes').addEventListener('input', previa)
 async function sincroniza() {
   const r = await fetch('/api/wa/templates/sync', { method: 'POST' })
-  if (r.ok) location.reload(); else alert((await r.json()).detail || 'falhou')
+  if (r.ok) location.reload(); else CEQ.avisar('Não deu pra sincronizar\n' + ((await r.json()).detail || 'A Meta não respondeu.'))
 }
 $('sincronizar').addEventListener('click', sincroniza)
 for (const b of document.querySelectorAll('button.atualizar')) b.addEventListener('click', () => { b.disabled = true; sincroniza() })
@@ -216,21 +216,21 @@ filtra()
 // ---- pastas: só no CEQ, a Meta não sabe delas ----
 async function chama(metodo, url, body) {
   const r = await fetch(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) })
-  if (!r.ok) { alert((await r.json()).detail || 'falhou'); return false }
+  if (!r.ok) { CEQ.avisar('Não deu certo\n' + ((await r.json()).detail || 'Tente de novo.')); return false }
   return true
 }
 $('nova-pasta').addEventListener('click', async () => {
-  const nome = prompt('Nome da pasta (ex.: Lançamento, Recuperação, Pós-venda)')
+  const nome = await CEQ.perguntar('Nova pasta', { placeholder: 'Ex.: Lançamento, Recuperação, Pós-venda', ok: 'Criar pasta' })
   if (nome && await chama('POST', '/api/wa/pastas', { nome })) location.reload()
 })
 $('renomear-pasta').addEventListener('click', async () => {
   const c = document.querySelector('#linha-pastas .chip.ligado')
-  const nome = prompt('Novo nome da pasta', c.dataset.nome)
+  const nome = await CEQ.perguntar('Renomear pasta', { valor: c.dataset.nome, ok: 'Renomear' })
   if (nome && nome !== c.dataset.nome && await chama('PATCH', `/api/wa/pastas/${c.dataset.v}`, { nome })) location.reload()
 })
 $('apagar-pasta').addEventListener('click', async () => {
   const c = document.querySelector('#linha-pastas .chip.ligado')
-  if (confirm(`Apagar a pasta "${c.dataset.nome}"? Os templates dela vão pra "sem pasta"; nada muda na Meta.`)
+  if (await CEQ.confirmar(`Apagar a pasta "${c.dataset.nome}"?\nOs templates dela vão pra "sem pasta"; nada muda na Meta.`, { perigo: true, ok: 'Apagar pasta' })
       && await chama('DELETE', `/api/wa/pastas/${c.dataset.v}`)) location.reload()
 })
 for (const s of document.querySelectorAll('select.mover')) s.addEventListener('change', async () => {

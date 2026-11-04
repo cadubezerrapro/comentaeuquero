@@ -98,7 +98,7 @@
       <td>
         {# exclusão a pedido da pessoa: some o lead, as tags e os campos capturados #}
         <form method="post" action="/leads/{{ l.id }}/apagar"
-              onsubmit="return confirm('Apagar {{ (l.username or l.igsid) }} e tudo que foi guardado dele (tags, telefone, e-mail)? Não tem como desfazer.')">
+              data-confirmar="Apagar {{ (l.username or l.igsid) }} e tudo que foi guardado dele (tags, telefone, e-mail)? Não tem como desfazer." data-confirmar-ok="Apagar" data-confirmar-perigo>
           <button type="submit" class="apagar" title="Apagar este lead e os dados dele" aria-label="Apagar lead">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

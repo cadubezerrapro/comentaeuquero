@@ -88,7 +88,7 @@ function entradaSalva(f) {
 }
 
 async function abrir(id) {
-  if (sujo.value && !confirm('Tem alteração não salva. Descartar?')) return
+  if (sujo.value && !(await window.CEQ.confirmar('Descartar alterações?\nTem alteração não salva neste fluxo.', { perigo: true, ok: 'Descartar' }))) return
   const f = await api(`/flows/${id}`)
   if (!f) return
   carregando.value = true
@@ -109,7 +109,7 @@ async function abrir(id) {
 }
 
 async function novoFluxo() {
-  const nome = prompt('Nome do fluxo:')
+  const nome = ((await window.CEQ.perguntar('Novo fluxo', { placeholder: 'Ex.: Isca EU QUERO', ok: 'Criar fluxo' })) || '').trim()
   if (!nome) return
   const r = await api('/flows', { method: 'POST', body: { name: nome } })
   if (r) { await carregarLista(); await abrir(r.id) }
@@ -123,7 +123,7 @@ async function apagarFluxo() {
   const nome = fluxos.value.find((x) => x.id === f.id)?.name || f.name
   // o banco apaga em cascata: passos, gatilhos e as sessões de quem estava no
   // meio do fluxo. O aviso soletra o estrago porque não tem lixeira nem desfazer.
-  if (!confirm(`Apagar o fluxo "${nome}"?\n\nSome com os passos, os gatilhos e as conversas em andamento dele. Não tem volta.`)) return
+  if (!(await window.CEQ.confirmar(`Apagar o fluxo "${nome}"?\nSome com os passos, os gatilhos e as conversas em andamento dele. Não tem volta.`, { perigo: true, ok: 'Apagar fluxo' }))) return
   // a condição do 404 abaixo lê o erro global; um "404:" velho pendurado na
   // faixa faria até uma recusa do servidor passar como sucesso
   erro.value = ''

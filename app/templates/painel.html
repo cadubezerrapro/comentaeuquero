@@ -40,7 +40,7 @@ da sua conta. Enquanto estiver vazio, nenhum comentário ou mensagem é processa
         </div>
       </div>
       <form method="post" action="/logout-todos"
-            onsubmit="return confirm('Encerrar todas as sessões abertas do painel, inclusive esta? Você vai precisar entrar de novo.')">
+            data-confirmar="Encerrar todas as sessões abertas do painel, inclusive esta? Você vai precisar entrar de novo." data-confirmar-ok="Encerrar sessões" data-confirmar-perigo>
         <button type="submit" class="quieto pequeno">Encerrar sessões em todos os dispositivos</button>
       </form>
     </div>

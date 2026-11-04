@@ -211,17 +211,17 @@
     <tr>
       <td><span class="dot {{ 'ok' if mcp_manual else 'mut' }}"></span>Token manual{% if mcp_manual %} <span class="sub">termina em {{ mcp_manual.final }}</span>{% endif %}</td>
       <td class="sub">{% if mcp_manual %}{{ (mcp_manual.ultimo_uso or '')|quando or 'nunca' }}{% else %}não gerado{% endif %}</td>
-      <td class="num">{% if mcp_manual %}<form method="post" action="/config/mcp/revogar" onsubmit="return confirm('Revogar o token manual? Quem usa ele perde o acesso na hora.')" style="margin:0;"><button class="perigo pequeno" style="margin:0;">Revogar</button></form>{% endif %}</td>
+      <td class="num">{% if mcp_manual %}<form method="post" action="/config/mcp/revogar" data-confirmar="Revogar o token manual? Quem usa ele perde o acesso na hora." data-confirmar-ok="Revogar" data-confirmar-perigo style="margin:0;"><button class="perigo pequeno" style="margin:0;">Revogar</button></form>{% endif %}</td>
     </tr>
     {% for c in mcp_conexoes %}
     <tr>
       <td><span class="dot ok"></span>{{ c.nome }} <span class="sub">via login</span></td>
       <td class="sub">{{ (c.ultimo_uso or '')|quando or 'nunca' }}</td>
-      <td class="num"><form method="post" action="/config/mcp/revogar" onsubmit="return confirm('Desconectar {{ c.nome }}?')" style="margin:0;"><input type="hidden" name="cliente_id" value="{{ c.cliente_id }}"><button class="perigo pequeno" style="margin:0;">Desconectar</button></form></td>
+      <td class="num"><form method="post" action="/config/mcp/revogar" data-confirmar="Desconectar {{ c.nome }}?" data-confirmar-ok="Desconectar" data-confirmar-perigo style="margin:0;"><input type="hidden" name="cliente_id" value="{{ c.cliente_id }}"><button class="perigo pequeno" style="margin:0;">Desconectar</button></form></td>
     </tr>
     {% endfor %}
   </table></div>
-  <form method="post" action="/config/mcp/token" {% if mcp_manual %}onsubmit="return confirm('Gerar um token novo? O atual para de funcionar.')"{% endif %}>
+  <form method="post" action="/config/mcp/token" {% if mcp_manual %}data-confirmar="Gerar um token novo? O atual para de funcionar." data-confirmar-ok="Gerar novo token"{% endif %}>
     <button type="submit" class="{{ 'quieto' if mcp_manual else '' }}">{{ 'Gerar token novo' if mcp_manual else 'Gerar token' }}</button>
   </form>
 

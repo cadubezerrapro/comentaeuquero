@@ -119,7 +119,7 @@ def _int_env(nome, padrao=0):
 RETENCAO_LEADS_DIAS = _int_env("RETENCAO_LEADS_DIAS")
 RETENCAO_EVENTOS_DIAS = _int_env("RETENCAO_EVENTOS_DIAS")
 # Versão do produto. Sobe junto com mudança que o dono da instância percebe.
-VERSAO = "1.13.1"
+VERSAO = "1.14.0"
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -217,6 +217,9 @@ templates.env.globals["wa_ativo"] = wa_ativo
 _CSS = STATIC_DIR / "ceq.css"
 templates.env.globals["css_v"] = (hashlib.sha1(_CSS.read_bytes()).hexdigest()[:10]
                                   if _CSS.exists() else "0")
+_UI_JS = STATIC_DIR / "ceq-ui.js"
+templates.env.globals["ui_v"] = (hashlib.sha1(_UI_JS.read_bytes()).hexdigest()[:10]
+                                 if _UI_JS.exists() else "0")
 
 
 def wa_estado(account) -> dict:
@@ -1031,7 +1034,10 @@ def editor(request: Request):
             "<p style='font-family:sans-serif;padding:2rem'>O editor não foi compilado "
             "nesta instalação. Rode <code>npm ci && npx vite build</code> dentro de "
             "<code>editor/</code>, ou use a imagem Docker oficial.</p>", status_code=200)
-    return FileResponse(EDITOR_INDEX)
+    # o kit de modais/dropdowns fica fora do bundle do Vite: versão pelo conteúdo
+    html = EDITOR_INDEX.read_text(encoding="utf-8").replace(
+        'src="/static/ceq-ui.js"', f'src="/static/ceq-ui.js?v={templates.env.globals["ui_v"]}"')
+    return HTMLResponse(html)
 
 
 @app.get("/avatar/{account_id}")

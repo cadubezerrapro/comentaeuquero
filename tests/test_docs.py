@@ -2,4 +2,4 @@ from app import main
 
 
 def test_versao():
-    assert main.VERSAO == "1.13.1"
+    assert main.VERSAO == "1.14.0"
