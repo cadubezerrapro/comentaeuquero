@@ -285,6 +285,25 @@ CREATE TABLE IF NOT EXISTS mcp_clientes (
     criado_em TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 
+-- Link rastreado (1.15.0). Um token por pessoa + nó + destino: reenviar a mesma
+-- mensagem reaproveita o token, então o clique de hoje e o de amanhã caem na mesma
+-- linha. O token é aleatório (não dá pra adivinhar o de outra pessoa) e não carrega
+-- dado nenhum do lead: quem vê a URL não descobre quem é.
+CREATE TABLE IF NOT EXISTS links_rastreados (
+    token TEXT PRIMARY KEY,
+    account_id INTEGER,
+    lead_id INTEGER REFERENCES leads(id) ON DELETE CASCADE,
+    flow_name TEXT DEFAULT '',
+    node_id TEXT DEFAULT '',
+    url TEXT NOT NULL,
+    criado_em TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    cliques INTEGER DEFAULT 0,
+    primeiro_clique_em TEXT DEFAULT '',
+    ultimo_clique_em TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_links_lead ON links_rastreados(lead_id, node_id);
+
 CREATE TABLE IF NOT EXISTS mcp_codigos (
     hash TEXT PRIMARY KEY,
     dados TEXT NOT NULL,                 -- o pedido aprovado (PKCE, redirect, cliente)
@@ -348,6 +367,10 @@ def init():
         # clássico com página do Facebook; no unificado fica vazio.
         "ALTER TABLE accounts ADD COLUMN api_modo TEXT DEFAULT 'instagram_login'",
         "ALTER TABLE accounts ADD COLUMN page_id TEXT DEFAULT ''",
+        # reconsulta de seguidor (1.15.0): quando o status foi conferido pela última
+        # vez e quando a pessoa passou de seguidor pra não seguidor
+        "ALTER TABLE leads ADD COLUMN seguidor_checado_em TEXT DEFAULT ''",
+        "ALTER TABLE leads ADD COLUMN deixou_de_seguir_em TEXT DEFAULT ''",
         # índice depois dos ALTERs: em banco antigo a coluna wa_id só existe agora
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_wa ON leads(account_id, wa_id) "
         "WHERE wa_id <> ''",
@@ -859,9 +882,10 @@ def funil(account_id, dias=0, flow_name=None):
     entregues  -> receberam ao menos a primeira mensagem (fluxo_envio ok=1)
     leram      -> o Instagram avisou leitura (fluxo_lido)
     avancaram  -> clicaram num botão de continuar ou responderam (postback/quick/texto)
+    clicaram   -> abriram o link rastreado (link_clique)
 
-    O clique em botão de LINK não entra: a Meta não reporta, o clique abre no navegador
-    da pessoa. Por isso um fluxo que termina em botão de link mede até 'leram'.
+    A Meta não reporta clique em link: o clique abre no navegador da pessoa. Só conta
+    em 'clicaram' o link rastreado (ver runtime._rastreia_link); link comum não aparece.
     Conta por `who` (o @ da pessoa), que é como o evento identifica quem interagiu.
     """
     corte = in_seconds_iso(-dias * 86400) if dias else ""
@@ -870,6 +894,7 @@ def funil(account_id, dias=0, flow_name=None):
         "entregues": "kind='fluxo_envio' AND ok=1",
         "leram": "kind='fluxo_lido'",
         "avancaram": "kind IN ('fluxo_postback','fluxo_quick_reply','fluxo_resposta') AND ok=1",
+        "clicaram": "kind='link_clique' AND ok=1",
     }
     def _extra(args):
         sql = ""
@@ -907,6 +932,7 @@ def funil(account_id, dias=0, flow_name=None):
             "entregues": e.get("entregues", 0),
             "leram": e.get("leram", 0),
             "avancaram": e.get("avancaram", 0),
+            "clicaram": e.get("clicaram", 0),
             "mensagens": msgs.get(nome, 0),
         })
     return linhas
@@ -2109,3 +2135,111 @@ def mcp_apagar_codigo(codigo) -> bool:
     cur = conn().execute("DELETE FROM mcp_codigos WHERE hash=?", (_sha(codigo),))
     conn().commit()
     return cur.rowcount > 0
+
+
+# ---------- link rastreado (1.15.0) ----------
+
+def token_link(account_id, lead_id, flow_name, node_id, url) -> str:
+    """Token do link desta pessoa neste nó. Reaproveita se já existe: reenviar a
+    mesma mensagem não pode multiplicar linhas nem separar o clique em dois."""
+    r = conn().execute(
+        "SELECT token FROM links_rastreados WHERE lead_id=? AND node_id=? AND url=? "
+        "AND flow_name=? LIMIT 1", (lead_id, node_id or "", url, flow_name or "")).fetchone()
+    if r:
+        return r["token"]
+    token = secrets.token_urlsafe(9)          # 12 caracteres, 72 bits
+    conn().execute(
+        "INSERT INTO links_rastreados (token, account_id, lead_id, flow_name, node_id, url) "
+        "VALUES (?,?,?,?,?,?)", (token, account_id, lead_id, flow_name or "", node_id or "", url))
+    conn().commit()
+    return token
+
+
+def link_por_token(token):
+    r = conn().execute("SELECT * FROM links_rastreados WHERE token=?", (token,)).fetchone()
+    return dict(r) if r else None
+
+
+# Recarregar a página ou abrir de novo logo depois não é outro clique: dentro desta
+# janela só o contador da linha sobe, o evento do funil não se repete.
+JANELA_CLIQUE_S = 1800
+
+
+def registrar_clique(token, via=""):
+    """Marca o clique. Devolve a linha do link (None se o token não existe) e se
+    gerou evento novo no funil."""
+    link = link_por_token(token)
+    if not link:
+        return None, False
+    agora = now_iso()
+    novo = (not link["ultimo_clique_em"]
+            or link["ultimo_clique_em"] < in_seconds_iso(-JANELA_CLIQUE_S))
+    conn().execute(
+        "UPDATE links_rastreados SET cliques=cliques+1, ultimo_clique_em=?, "
+        "primeiro_clique_em=CASE WHEN primeiro_clique_em='' THEN ? ELSE primeiro_clique_em END "
+        "WHERE token=?", (agora, agora, token))
+    conn().commit()
+    if novo:
+        lead = get_lead(link["lead_id"]) or {}
+        who = lead.get("username") or lead.get("wa_id") or ""
+        from urllib.parse import urlsplit
+        log_event("link_clique", link["account_id"], link["flow_name"], "link", True, who,
+                  {"no": link["node_id"], "destino": urlsplit(link["url"]).netloc, "via": via})
+    return link_por_token(token), novo
+
+
+# ---------- reconsulta de seguidor (1.15.0) ----------
+
+def leads_para_reconsultar(account_id, tags, limite) -> list:
+    """Quem a reconsulta confere nesta rodada: lead do Instagram (só WA não tem
+    perfil lá) que hoje consta como seguidor, ou que já deixou de seguir (pra
+    perceber se voltou). Primeiro quem está há mais tempo sem conferir.
+
+    tags vazio = qualquer lead; senão, só quem tem uma das etiquetas."""
+    onde = ["l.account_id=?", f"l.igsid NOT LIKE '{PREFIXO_SO_WA}%'",
+            "(l.is_follower=1 OR EXISTS (SELECT 1 FROM lead_tags d WHERE d.lead_id=l.id "
+            "AND d.tag='deixou_de_seguir'))"]
+    args = [account_id]
+    if tags:
+        onde.append(f"EXISTS (SELECT 1 FROM lead_tags t WHERE t.lead_id=l.id AND t.tag IN {_em(tags)})")
+        args += list(tags)
+    args.append(int(limite))
+    return [dict(r) for r in conn().execute(
+        f"SELECT l.* FROM leads l WHERE {' AND '.join(onde)} "
+        "ORDER BY l.seguidor_checado_em ASC, l.id ASC LIMIT ?", args)]
+
+
+def gravar_seguidor(lead_id, status) -> str:
+    """Grava o resultado de uma reconsulta. status: 'segue' | 'nao_segue' | 'desconhecido'.
+
+    Devolve a mudança: 'deixou' (1 -> 0), 'voltou' (tinha deixado e segue de novo),
+    'desconhecido' (a Meta parou de informar) ou '' (nada mudou).
+
+    'desconhecido' grava NULL, nunca 1: não dá pra afirmar que a pessoa segue se a
+    Meta não disse."""
+    lead = get_lead(lead_id)
+    if not lead:
+        return ""
+    agora = now_iso()
+    antes = lead.get("is_follower")
+    mudanca = ""
+    if status == "segue":
+        conn().execute("UPDATE leads SET is_follower=1, seguidor_checado_em=? WHERE id=?",
+                       (agora, lead_id))
+        if has_tag(lead_id, "deixou_de_seguir"):
+            remove_tag(lead_id, "deixou_de_seguir")
+            mudanca = "voltou"
+    elif status == "nao_segue":
+        conn().execute("UPDATE leads SET is_follower=0, seguidor_checado_em=? WHERE id=?",
+                       (agora, lead_id))
+        if antes == 1:
+            conn().execute("UPDATE leads SET deixou_de_seguir_em=? WHERE id=?", (agora, lead_id))
+            add_tag(lead_id, "deixou_de_seguir")
+            mudanca = "deixou"
+    else:
+        conn().execute("UPDATE leads SET is_follower=NULL, seguidor_checado_em=? WHERE id=?",
+                       (agora, lead_id))
+        if antes is not None:
+            mudanca = "desconhecido"
+    conn().commit()
+    return mudanca

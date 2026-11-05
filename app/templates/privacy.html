@@ -15,6 +15,11 @@
   a resposta é guardada no banco desta instância, associada ao perfil de quem respondeu.
   Também são guardados nome, @, foto de perfil e número de seguidores, obtidos da própria
   API do Instagram, além das etiquetas que o fluxo atribuir.</p>
+  <p>Para medir se as mensagens funcionam, o app registra se a pessoa segue a conta
+  (conferido periodicamente pela API do Instagram, só para quem já conversou com a conta)
+  e se ela abriu um link enviado pelo fluxo. O link leva um código aleatório que não
+  identifica a pessoa para quem o vê; a abertura é registrada só para os sites do próprio
+  titular da conta. Esses dados não geram mensagens automáticas.</p>
   <h2>O que fazemos com os dados</h2>
   <p>Os eventos são processados no servidor do titular da conta e registrados em log técnico
   para operação e depuração. Os dados não são vendidos, compartilhados nem usados para

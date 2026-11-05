@@ -193,6 +193,7 @@ def resumo(periodo: str = "7d", desde: str = "", ate: str = "", fluxo: str = "")
         "pessoas_que_receberam": t.get("entregues", 0),
         "pessoas_que_leram": t.get("leram", 0),
         "pessoas_que_avancaram": t.get("avancaram", 0),
+        "pessoas_que_clicaram_no_link": t.get("clicaram", 0),
         "mensagens_entregues": t.get("mensagens", 0),
         "falhas": t.get("falhas", 0),
         "leads_novos": campos["leads_no_periodo"],
@@ -200,7 +201,7 @@ def resumo(periodo: str = "7d", desde: str = "", ate: str = "", fluxo: str = "")
         "campos_preenchidos": campos["por_campo"],
         "por_origem": por_origem,
         "por_fluxo": [{k: r[k] for k in ("fluxo", "acionaram", "entregues", "leram",
-                                         "avancaram", "falhas")} for r in por_fluxo],
+                                         "avancaram", "clicaram", "falhas")} for r in por_fluxo],
         "por_dia": [{k: r[k] for k in ("dia", "acionaram", "entregues", "mensagens",
                                        "falhas")} for r in por_dia],
         "nota": "Pessoas são contadas uma vez por período; 'falhas' inclui qualquer "
@@ -294,7 +295,8 @@ def ver_fluxo(fluxo_id: int) -> dict:
             "gatilhos": [_gatilho_publico(t) for t in completo["triggers"]],
             "passos": passos, "avisos": completo["avisos"],
             "funil_total": {k: funil.get(k, 0) for k in
-                            ("acionaram", "entregues", "leram", "avancaram", "mensagens")},
+                            ("acionaram", "entregues", "leram", "avancaram", "clicaram",
+                             "mensagens")},
             "abrir_no_editor": _url_editor(f["id"])}
 
 

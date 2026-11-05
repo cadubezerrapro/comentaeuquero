@@ -13,6 +13,7 @@ Na ordem em que você vai precisar. Os três primeiros são obrigatórios; o res
 - [Story e live](./story-e-live.md): resposta de story, comentário em live e palavra no direct.
 - [IA no fluxo](./ia-no-fluxo.md): responder dúvidas com um modelo de linguagem.
 - [Etiquetas e campos](./etiquetas-e-campos.md): marcar quem fez o quê e guardar e-mail, telefone ou qualquer resposta.
+- [Link rastreado e quem deixou de seguir](./link-rastreado.md): quem abriu o link do fluxo e quem parou de seguir depois.
 
 ## WhatsApp
 

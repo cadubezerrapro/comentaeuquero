@@ -12,16 +12,25 @@ const etapas = computed(() => [
   { chave: 'receberam', rotulo: 'receberam', valor: d.value.entregues || 0 },
   { chave: 'leram', rotulo: 'leram', valor: d.value.leram || 0 },
   { chave: 'avançaram', rotulo: 'avançaram', valor: d.value.avancaram || 0 },
+  { chave: 'clicaram', rotulo: 'clicaram', valor: d.value.clicaram || 0 },
 ])
 
 // o topo mostra a etapa mais funda com dado: sem isso um fluxo que só entregou
 // (leitura e avanço ainda em zero) apareceria com 0% e pareceria quebrado
 const hero = computed(() => {
   const x = d.value
+  if (x.clicaram) return { n: pct(x.clicaram, base.value), rot: 'clicaram no link' }
   if (x.avancaram) return { n: pct(x.avancaram, base.value), rot: 'chegaram ao fim' }
   if (x.leram) return { n: pct(x.leram, base.value), rot: 'leram a mensagem' }
   return { n: pct(x.entregues || 0, base.value), rot: 'receberam a mensagem' }
 })
+
+// taxa sobre a última etapa anterior com dado: fluxo sem botão de continuar tem
+// "avançaram" zerado, e "clicaram" apareceria sempre como 0%
+function anterior(i) {
+  for (let j = i - 1; j >= 0; j--) if (etapas.value[j].valor) return etapas.value[j].valor
+  return 0
+}
 
 function pct(parte, todo) {
   return todo ? Math.round((parte / todo) * 100) : 0
@@ -53,7 +62,7 @@ function pct(parte, todo) {
         <span class="et-num">{{ e.valor }}</span>
         <span class="et-taxa">
           <template v-if="i === 0"><i>base</i></template>
-          <template v-else>{{ pct(e.valor, etapas[i - 1].valor) }}%</template>
+          <template v-else>{{ pct(e.valor, anterior(i)) }}%</template>
         </span>
       </div>
     </div>
@@ -61,8 +70,8 @@ function pct(parte, todo) {
     <p class="pe">
       {{ d.mensagens || 0 }} mensagem{{ (d.mensagens !== 1) ? 's' : '' }}
       entregue{{ (d.mensagens !== 1) ? 's' : '' }} no total.
-      <template v-if="!d.avancaram">Botão de link não conta como avanço: a Meta não
-      reporta o clique, meça pelo UTM no destino.</template>
+      <template v-if="!d.clicaram">Clicaram só conta link rastreado: a Meta não reporta
+      clique em link, quem avisa é o site de destino.</template>
       <span class="cinza">Leram depende do aviso de leitura do Instagram.</span>
     </p>
   </div>
@@ -98,6 +107,7 @@ function pct(parte, todo) {
 .preenche.s1 { background: color-mix(in srgb, var(--texto) 75%, transparent); }
 .preenche.s2 { background: color-mix(in srgb, var(--texto) 50%, transparent); animation-delay: .06s; }
 .preenche.s3 { background: color-mix(in srgb, var(--texto) 30%, transparent); animation-delay: .12s; }
+.preenche.s4 { background: color-mix(in srgb, var(--texto) 18%, transparent); animation-delay: .18s; }
 .et-num { font-size: 14px; font-weight: 500;
           font-variant-numeric: tabular-nums; color: var(--ink); min-width: 30px; text-align: right; }
 .et-taxa { font-size: 12px; color: var(--mut);

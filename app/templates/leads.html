@@ -85,6 +85,7 @@
           <a class="celula" href="{{ com('segue', '1') }}"><span class="dot ok"></span>sim</a>
         {% elif l.is_follower == 0 %}
           <a class="celula" href="{{ com('segue', '0') }}"><span class="dot mut"></span>não</a>
+          {% if l.deixou_de_seguir_em %}<br><span class="sub" title="a reconsulta viu a pessoa deixar de seguir">deixou em {{ l.deixou_de_seguir_em[8:10] }}/{{ l.deixou_de_seguir_em[5:7] }}</span>{% endif %}
         {% else %}—{% endif %}
       </td>
       <td>

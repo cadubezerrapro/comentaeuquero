@@ -31,6 +31,17 @@ Todas as variáveis que a instância lê. Depois de mudar o `.env`, rode `docker
 |---|---|---|
 | `CEQ_ENVIOS_HORA` | `180` | Teto inicial de envios por hora. Depois de ajustado em Configurações (de 10 a 750), vale o do painel. |
 
+## Rastreamento
+
+| Variável | Padrão | Para quê |
+|---|---|---|
+| `CEQ_LINK_RASTREADO` | `parametro` | Como medir o clique no link do fluxo. `parametro`: o link segue com o domínio real e ganha `?ceq=<token>`; o site de destino avisa a abertura. `redirecionar`: o link passa por `BASE_URL/r/<token>` (302). `desligado`: nada muda. Ver [Link rastreado](../tutoriais/link-rastreado.md). |
+| `CEQ_LINK_DOMINIOS` | vazio | Domínios que recebem o `?ceq=` no modo `parametro`, separados por vírgula (ex.: `ia-thefuture.vercel.app`). Vazio: nenhum link muda. Também são as únicas origens aceitas no aviso de abertura. |
+| `CEQ_RECONSULTA_HORAS` | `24` | De quanto em quanto tempo reconferir quem segue a conta. `0` desliga. |
+| `CEQ_RECONSULTA_TAGS` | `isca_viral` | Só reconfere leads com uma destas etiquetas (vírgula separa). `*` = todos que constam como seguidores. |
+| `CEQ_RECONSULTA_MAX` | `150` | Máximo de perfis por rodada. |
+| `CEQ_RECONSULTA_INTERVALO_S` | `3` | Segundos entre uma consulta e outra. |
+
 ## Retenção de dados
 
 | Variável | Padrão | Para quê |

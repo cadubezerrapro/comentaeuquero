@@ -448,7 +448,7 @@ def metricas_do_flow(flow_id: int, periodo: str = "tudo"):
     if linhas:
         return linhas[0]
     return {"fluxo": flow["name"], "existe": True, "acionaram": 0, "entregues": 0,
-            "leram": 0, "avancaram": 0, "mensagens": 0}
+            "leram": 0, "avancaram": 0, "clicaram": 0, "mensagens": 0}
 
 
 # ---------- histórico ----------
@@ -467,6 +467,7 @@ COLUNAS_HISTORICO = """
     COUNT(DISTINCT CASE WHEN kind='fluxo_lido' AND who<>'' THEN who END) AS leram,
     COUNT(DISTINCT CASE WHEN kind IN ('fluxo_postback','fluxo_quick_reply','fluxo_resposta')
                         AND ok=1 AND who<>'' THEN who END) AS avancaram,
+    COUNT(DISTINCT CASE WHEN kind='link_clique' AND ok=1 AND who<>'' THEN who END) AS clicaram,
     SUM(kind='sem_keyword') AS sem_keyword,
     SUM(ok=0) AS falhas,
     COUNT(*) AS eventos"""
@@ -602,6 +603,18 @@ def campos_capturados(desde: str = "", ate: str = "", tz: float = -3):
             "por_campo": por_campo}
 
 
+@router.post("/seguidores/reconsultar")
+def reconsultar_seguidores():
+    """Roda a reconsulta de seguidores agora, em segundo plano (leva minutos: o
+    intervalo entre consultas é proposital). Mesmas travas da rodada automática."""
+    import threading
+    from . import seguidores
+    conta = _conta_ou_erro()
+    threading.Thread(target=seguidores.rodar, args=(conta,), daemon=True,
+                     name="ceq-reconsulta-manual").start()
+    return {"ok": True, "iniciada": True}
+
+
 @router.get("/leads")
 def listar_leads(desde: str = "", ate: str = "", tz: float = -3, campo: str = "",
                  keyword: str = "", limit: int = 200, offset: int = 0):
@@ -614,7 +627,8 @@ def listar_leads(desde: str = "", ate: str = "", tz: float = -3, campo: str = ""
     fuso = _fuso(tz)
     args = [conta["id"]]
     sql = ("SELECT l.id, l.username, l.name, l.followers, l.is_follower, l.first_ts, "
-           "l.last_ts, l.interactions, l.last_keyword FROM leads l WHERE l.account_id=?")
+           "l.last_ts, l.interactions, l.last_keyword, l.deixou_de_seguir_em "
+           "FROM leads l WHERE l.account_id=?")
     sql += _janela(desde, ate, fuso, args, col="l.first_ts")
     if keyword:
         sql += " AND l.last_keyword=?"
@@ -686,7 +700,7 @@ def exportar_csv(tipo: str = "historico", desde: str = "", ate: str = "", tz: fl
         linhas = listar_leads(desde=desde, ate=ate, tz=tz, campo=flow, limit=limit)
         chaves = sorted({k for l in linhas for k in l["campos"]})
         fixas = ["username", "name", "first_ts", "last_ts", "last_keyword",
-                 "followers", "is_follower", "interactions"]
+                 "followers", "is_follower", "deixou_de_seguir_em", "interactions"]
         w.writerow(fixas + chaves)
         for l in linhas:
             w.writerow([l.get(c, "") for c in fixas] + [l["campos"].get(k, "") for k in chaves])

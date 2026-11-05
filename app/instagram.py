@@ -432,6 +432,75 @@ def fetch_profile(conta_ou_token, igsid) -> dict:
     return {}
 
 
+def _uso_maximo(headers) -> float:
+    """Maior percentual de uso que a Meta informa nos headers de rate limit (0-100).
+    X-Business-Use-Case-Usage traz call_count/total_cputime/total_time por caso de
+    uso; X-App-Usage, o do app. Sem header, 0."""
+    maior = 0.0
+    for nome in ("X-Business-Use-Case-Usage", "X-App-Usage"):
+        try:
+            dados = _json.loads(headers.get(nome, "") or "{}")
+        except (ValueError, TypeError):
+            continue
+        itens = []
+        if isinstance(dados, dict) and any(isinstance(v, list) for v in dados.values()):
+            itens = [i for v in dados.values() if isinstance(v, list) for i in v]
+        elif isinstance(dados, dict):
+            itens = [dados]
+        for i in itens:
+            for campo in ("call_count", "total_cputime", "total_time"):
+                try:
+                    maior = max(maior, float(i.get(campo) or 0))
+                except (TypeError, ValueError, AttributeError):
+                    pass
+    return maior
+
+
+CODIGOS_TOKEN_OU_PERMISSAO = {102, 190, 200, 10, 3}
+
+
+def consulta_seguidor(conta, igsid):
+    """Pergunta à Meta se a pessoa segue a conta, sem confundir os casos.
+
+    Devolve (status, uso, detalhe):
+      'segue' / 'nao_segue'  a Meta respondeu o campo
+      'desconhecido'         a Meta respondeu sem o campo, ou recusou o perfil
+                             (sem consentimento, bloqueou a conta, perfil sumiu)
+      'erro'                 rede ou erro do lado da Meta: tentar outro dia
+      'freio'                código de throttle: parar tudo
+      'parar'                token inválido ou app sem permissão: parar tudo
+    uso = maior percentual de uso informado nos headers (0-100).
+
+    Diferente de fetch_profile, que devolve {} pra tudo isso junto: aqui um tropeço
+    de rede não pode apagar o status de ninguém."""
+    conta, access_token = _conta_e_token(conta)
+    try:
+        r = requests.get(f"{base(conta)}/{igsid}", params={
+            "fields": "is_user_follow_business",
+            "access_token": access_token}, timeout=15)
+    except requests.RequestException as e:
+        return "erro", 0.0, sem_segredo(e)[:200]
+    uso = _uso_maximo(r.headers)
+    corpo = _corpo(r)
+    if r.status_code == 200 and isinstance(corpo, dict):
+        valor = corpo.get("is_user_follow_business")
+        if valor is True:
+            return "segue", uso, ""
+        if valor is False:
+            return "nao_segue", uso, ""
+        return "desconhecido", uso, "campo ausente"
+    codigo = _codigo_erro(corpo)
+    if codigo in CODIGOS_THROTTLE:
+        return "freio", uso, resumo_erro(r.status_code, corpo)
+    # token vencido ou sem permissão é problema da CONTA, não do lead: tratar como
+    # "desconhecido" apagaria o status de todo mundo numa rodada só
+    if codigo in CODIGOS_TOKEN_OU_PERMISSAO:
+        return "parar", uso, resumo_erro(r.status_code, corpo)
+    if 400 <= r.status_code < 500:
+        return "desconhecido", uso, resumo_erro(r.status_code, corpo)
+    return "erro", uso, resumo_erro(r.status_code, corpo)
+
+
 def fetch_username(conta_ou_token, igsid) -> str:
     conta, access_token = _conta_e_token(conta_ou_token)
     try:

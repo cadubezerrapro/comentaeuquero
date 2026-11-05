@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.15.0 (2026-11-05)
+
+- **Link rastreado**: o funil do fluxo ganha a etapa *clicaram*. Por padrão o link
+  segue com o domínio real e ganha `?ceq=<token>` (só nos domínios de
+  `CEQ_LINK_DOMINIOS`); o site de destino avisa a abertura em `POST /r/<token>/visto`.
+  Modo opcional `CEQ_LINK_RASTREADO=redirecionar` passa por `/r/<token>` (302, mesmo
+  destino pra robô e pessoa, sem cloaking). Botão de link também é rastreado.
+- **Quem deixou de seguir**: tarefa de fundo, uma vez por dia, reconfere os seguidores
+  com a etiqueta `isca_viral`. Quem parou ganha a etiqueta `deixou_de_seguir` e a data
+  aparece em Leads e no CSV. Só lê, devagar, para no primeiro sinal de limite da Meta
+  e nunca marca "segue" quando a Meta não informa. `POST /api/seguidores/reconsultar`
+  roda na hora.
+
 ## 1.14.0 (2026-11-04)
 
 - Modais e dropdowns no estilo do painel, no painel e no editor de fluxos. Saem a

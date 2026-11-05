@@ -23,7 +23,8 @@ from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import alerta, api, db, flowengine, instagram, mcp_server, runtime, segredos, whatsapp
+from . import (alerta, api, db, flowengine, instagram, links, mcp_server, runtime, segredos,
+               seguidores, whatsapp)
 from .senha import conferir_senha, definir_senha, senha_definida  # noqa: F401
 
 VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "troque-este-token")
@@ -119,7 +120,7 @@ def _int_env(nome, padrao=0):
 RETENCAO_LEADS_DIAS = _int_env("RETENCAO_LEADS_DIAS")
 RETENCAO_EVENTOS_DIAS = _int_env("RETENCAO_EVENTOS_DIAS")
 # Versão do produto. Sobe junto com mudança que o dono da instância percebe.
-VERSAO = "1.14.0"
+VERSAO = "1.15.0"
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -459,6 +460,8 @@ async def startup():
     # thread daemon: é ela que faz os delays vencerem e os timeouts caírem no ramo
     # certo. Sem ela, fluxo com delay para no meio e nunca continua.
     threading.Thread(target=runtime.worker_loop, daemon=True, name="ceq-worker").start()
+    # reconsulta de seguidores (1.15.0): thread própria, devagar, para no freio da Meta
+    threading.Thread(target=seguidores.loop, daemon=True, name="ceq-seguidores").start()
     asyncio.get_event_loop().run_in_executor(None, _resubscrever_webhooks)
     asyncio.get_event_loop().run_in_executor(None, _atualizar_fotos)
     asyncio.get_event_loop().run_in_executor(None, _atualizar_estado_wa)
@@ -592,6 +595,61 @@ def health(request: Request):
         "teto_envios_hora": runtime.teto_atual(),
         "cooldown_meta_s": int(instagram.cooldown_restante()),
     }
+
+
+# ---------- link rastreado (1.15.0, ver app/links.py) ----------
+
+_SEM_CACHE = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow",
+              "Referrer-Policy": "no-referrer"}
+
+
+@app.get("/r/{token}")
+def link_rastreado(token: str, request: Request):
+    """Modo "redirecionar": conta o clique e manda pro destino.
+
+    Todo mundo recebe o MESMO destino, robô de prévia inclusive: entregar outra coisa
+    pro robô da Meta é cloaking, que é motivo de bloqueio do domínio. O robô só não
+    conta como clique. Só redireciona pra URL que o próprio fluxo gravou: token
+    desconhecido é 404, nunca um redirecionamento aberto."""
+    if not links.RE_TOKEN.match(token or ""):
+        return PlainTextResponse("link não encontrado", status_code=404, headers=_SEM_CACHE)
+    if links.e_robo(request.headers.get("user-agent", "")):
+        link = db.link_por_token(token)
+    else:
+        link, _ = db.registrar_clique(token, via="redirecionar")
+    if not link:
+        return PlainTextResponse("link não encontrado", status_code=404, headers=_SEM_CACHE)
+    return RedirectResponse(link["url"], status_code=302, headers=_SEM_CACHE)
+
+
+def _cors_visto(request: Request) -> dict:
+    origem = request.headers.get("origin", "")
+    if not links.origem_permitida(origem):
+        return {}
+    return {"Access-Control-Allow-Origin": origem, "Vary": "Origin",
+            "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Max-Age": "86400"}
+
+
+@app.options("/r/{token}/visto")
+def link_visto_preflight(token: str, request: Request):
+    cors = _cors_visto(request)
+    return Response(status_code=204 if cors else 403, headers=cors)
+
+
+@app.post("/r/{token}/visto")
+def link_visto(token: str, request: Request):
+    """Modo "parametro": o site de destino avisa que a página abriu com ?ceq=<token>.
+
+    Só aceita de origem listada em CEQ_LINK_DOMINIOS. Não devolve nada do lead: a
+    resposta é 204 vazia, exista o token ou não, pra rota não servir de oráculo."""
+    cors = _cors_visto(request)
+    if not cors:
+        return Response(status_code=403)
+    if (links.RE_TOKEN.match(token or "")
+            and not links.e_robo(request.headers.get("user-agent", ""))):
+        db.registrar_clique(token, via="parametro")
+    return Response(status_code=204, headers={**cors, **_SEM_CACHE})
 
 
 @app.get("/webhook")
@@ -1378,6 +1436,10 @@ ROTULOS_LOG = {
     "lead_apagado": "Lead apagado", "backup_baixado": "Backup baixado",
     "foto_perfil": "Foto de perfil", "ia_fallback": "IA usou o texto reserva",
     "mcp_ferramenta": "Uso pelo Claude (MCP)", "mcp_acesso_autorizado": "Claude autorizado",
+    "link_clique": "Abriu o link", "link_rastreado_erro": "Erro no link rastreado",
+    "deixou_de_seguir": "Deixou de seguir", "voltou_a_seguir": "Voltou a seguir",
+    "reconsulta_seguidores": "Reconsulta de seguidores",
+    "reconsulta_freio": "Reconsulta parada pela Meta", "reconsulta_erro": "Erro na reconsulta",
 }
 
 GRUPOS_LOG = {
@@ -1385,14 +1447,15 @@ GRUPOS_LOG = {
     "envios": ("fluxo_envio", "private_reply", "dm_reply", "public_reply",
                "public_reply_pulada", "envio_adiado", "fora_da_janela", "throttle_meta"),
     "fluxos": ("fluxo_inicio", "fluxo_postback", "fluxo_quick_reply", "fluxo_resposta",
-               "fluxo_lido", "fluxo_split", "sem_keyword"),
+               "fluxo_lido", "fluxo_split", "sem_keyword", "link_clique",
+               "deixou_de_seguir", "voltou_a_seguir", "reconsulta_seguidores"),
     "webhooks": ("webhook", "webhook_recusado", "webhook_sem_conta", "subscribe_webhooks"),
     "conta": ("oauth_ok", "oauth_erro", "token_refresh", "token_invalido",
               "config_alterada", "senha_definida", "login_falhou", "login_por_http",
               "sessoes_revogadas", "mcp_acesso_autorizado"),
 }
 _ERRO_SQL = ("(ok=0 OR kind LIKE '%erro%' OR kind LIKE '%recusad%' OR kind IN "
-             "('token_invalido','login_falhou','login_por_http','throttle_meta',"
+             "('token_invalido','login_falhou','login_por_http','throttle_meta','reconsulta_freio',"
              "'webhook_sem_conta','fora_da_janela'))")
 
 

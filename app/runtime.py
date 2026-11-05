@@ -25,7 +25,7 @@ import unicodedata
 
 import requests
 
-from . import db, instagram, wa_traducao, whatsapp
+from . import db, instagram, links, wa_traducao, whatsapp
 
 log = logging.getLogger(__name__)
 
@@ -296,8 +296,50 @@ def _detalhe(ok, base, status, corpo) -> str:
     return base
 
 
+def _com_links_rastreados(account, session, node, lead):
+    """Cópia do nó com o link e os botões de link trocados pelo link rastreado.
+
+    Devolve (nó, trocas) onde trocas é [(original, rastreado)], pra trocar também o
+    link que o dono escreveu direto no texto. Sem rastreio configurado, o nó volta
+    igual e trocas vazio."""
+    data = dict(node.get("data") or {})
+    flow = db.get_flow(session.get("flow_id")) or {}
+    nome, no = flow.get("name", ""), data.get("_link_no") or node.get("id", "")
+    trocas = []
+
+    def _troca(url):
+        novo = links.rastrear(url, account["id"], lead, nome, no)
+        if novo and novo != url:
+            trocas.append((url.strip(), novo))
+        return novo
+
+    if data.get("link"):
+        data["link"] = _troca(str(data["link"]))
+    if data.get("buttons"):
+        data["buttons"] = [{**b, "url": _troca(str(b["url"]))} if b.get("url") else b
+                           for b in data["buttons"]]
+    return {**node, "data": data}, trocas
+
+
+def _troca_links(texto, trocas):
+    """Troca toda ocorrência do link original pelo rastreado. O rastreado pode conter
+    o original (https://a.com/x -> https://a.com/x?ceq=T), então ele é protegido
+    antes, senão a troca o estragaria."""
+    for original, novo in trocas:
+        if not original or original not in texto:
+            continue
+        marca = "\x00ceq\x00"
+        texto = texto.replace(novo, marca).replace(original, novo).replace(marca, novo)
+    return texto
+
+
 def _enviar(account, session, node, lead, recipient):
     """Executa o envio de um nó de mensagem. Retorna (ok, detalhe)."""
+    try:
+        node, trocas = _com_links_rastreados(account, session, node, lead)
+    except Exception as e:   # rastreio nunca pode impedir a mensagem de sair
+        db.log_event("link_rastreado_erro", account.get("id"), payload={"erro": str(e)[:200]})
+        trocas = []
     tipo = node.get("type")
     data = node.get("data") or {}
     contexto = session.get("context") or {}
@@ -310,6 +352,7 @@ def _enviar(account, session, node, lead, recipient):
     # {resposta_api}... que o lead induziu a IA a escrever.
     pronto = bool(data.get(_TEXTO_PRONTO))
     texto = bruto if pronto else render(bruto, lead, ctx)
+    texto = _troca_links(texto, trocas)
     marca = f" [v{variacao + 1}]" if variacao is not None else ""
 
     if canal_de(session) == "wa":
@@ -874,6 +917,9 @@ def _junta_texto_com_botoes(flow, nodes, node_id, node):
         return None
     # as variações do nó de botões são do texto dele sozinho: juntas não valem
     dados.update({"text": junto, "variants": []})
+    if link:
+        # o link do nó de texto viaja junto pra ser rastreado (e creditado a ele)
+        dados.update({"link": link, "_link_no": node_id})
     return seguinte_id, {**seguinte, "data": dados}
 
 
