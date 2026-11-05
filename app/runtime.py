@@ -100,6 +100,22 @@ LIMITER = RateLimiter()
 TETO_MAXIMO = 750
 
 
+# Balde à parte pra mensagem com URL crua no texto (1.15.0). A Meta tem um teto
+# próprio, não publicado, de mensagens com link por conta num período curto; passou
+# dele, o Instagram segura todo link da conta por um tempo. Num Reel que viraliza,
+# o balde geral (180/h) ainda deixaria sair uma rajada de links. Aqui a mensagem com
+# link espera a vez, sem ser perdida: o motor reagenda. Número conservador, sem
+# base oficial: ajuste em CEQ_LINKS_HORA (0 desliga o balde).
+LINKS_POR_HORA = int(os.environ.get("CEQ_LINKS_HORA", "") or 60)
+LIMITER_LINKS = RateLimiter(LINKS_POR_HORA) if LINKS_POR_HORA > 0 else None
+RE_URL = re.compile(r"https?://\S", re.IGNORECASE)
+SEM_FICHA_LINK = "sem ficha link"
+
+
+def tem_url_crua(texto) -> bool:
+    return bool(RE_URL.search(texto or ""))
+
+
 def teto_atual() -> int:
     return int(LIMITER.capacidade)
 
@@ -364,14 +380,23 @@ def _enviar(account, session, node, lead, recipient):
     if resta > 0:
         return None, f"cooldown_meta {int(resta)}s"
 
-    if not LIMITER.tenta():
-        return None, "sem ficha"   # None = tentar de novo depois, não é falha
-
     if tipo == "text":
         link = data.get("link") or ""
         # texto que ainda não tem o link recebe o link numa linha no fim
         if link and not wa_traducao.tem_link(texto, link):   # como no WhatsApp
             texto = f"{texto}\n{link}".strip()
+
+    # o balde de links vem antes do geral: sem vez pro link, não gasta ficha do geral
+    com_link = tipo in ("text", "buttons", "quick_replies") and tem_url_crua(texto)
+    if com_link and LIMITER_LINKS is not None and not LIMITER_LINKS.tem_ficha():
+        return None, SEM_FICHA_LINK
+
+    if not LIMITER.tenta():
+        return None, "sem ficha"   # None = tentar de novo depois, não é falha
+    if com_link and LIMITER_LINKS is not None:
+        LIMITER_LINKS.tenta()
+
+    if tipo == "text":
         ok, status, corpo = instagram.send_text(account, recipient, texto)
         return ok, _detalhe(ok, texto[:80] + marca, status, corpo)
 
@@ -512,6 +537,37 @@ def _condicao_bate(cond, lead, context) -> bool:
         if lead.get("is_follower") is None:
             return True
         return bool(lead.get("is_follower"))
+    return False
+
+
+# Quantas vezes o "segue a conta" pede o follow antes de entregar mesmo assim.
+# Pedir é permitido; travar o conteúdo atrás do follow é o que a política da Meta
+# não aceita (incentivo a seguir não está entre as ações permitidas), além de virar
+# loop pra quem a API não mostra como seguidor. 0 = muro (não recomendado).
+PEDIDOS_SEGUIR_PADRAO = 1
+
+
+def _pedidos_permitidos(data) -> int:
+    try:
+        return max(0, int(data.get("libera_apos", PEDIDOS_SEGUIR_PADRAO)))
+    except (TypeError, ValueError):
+        return PEDIDOS_SEGUIR_PADRAO
+
+
+def _libera_sem_follow(account, flow, session_id, node_id, data, contexto, lead) -> bool:
+    """Não segue: conta o pedido nesta sessão. Já pediu o permitido -> libera.
+
+    O contador é da sessão, não do nó: fluxo com duas Condições em sequência (pede,
+    depois "ainda não te achei") também pede só o permitido no total."""
+    limite = _pedidos_permitidos(data)
+    chave = "_pedidos_seguir"
+    feitos = int(contexto.get(chave) or 0)
+    if limite and feitos >= limite:
+        db.log_event("seguidor_liberado", account["id"], flow["name"], "", True,
+                     quem(lead), {"no": node_id, "pedidos": feitos})
+        return True
+    contexto[chave] = feitos + 1
+    db.update_session(session_id, context=contexto)
     return False
 
 
@@ -983,9 +1039,13 @@ def _run(account, session_id, node_id, comment_id=None, limite_nos=40):
 
         # --- nós de decisão (não enviam nada) ---
         if tipo == "condition":
-            if (data.get("check") or data.get("type")) == "e_seguidor":
+            e_seguidor = (data.get("check") or data.get("type")) == "e_seguidor"
+            if e_seguidor:
                 lead = _refresh_seguidor(account, lead)
             bateu = _condicao_bate(data, lead, contexto)
+            if e_seguidor and not bateu:
+                bateu = _libera_sem_follow(account, flow, session_id, node_id, data,
+                                           contexto, lead)
             node_id = next_node_id(flow, node_id, "sim" if bateu else "nao")
             continue
 
@@ -1101,6 +1161,8 @@ def _run(account, session_id, node_id, comment_id=None, limite_nos=40):
             # o comment_id vai junto no job. Sem ele, o replay de uma private reply
             # adiada virava DM comum, que a Meta recusa pra quem nunca respondeu.
             espera = _espera(canal_de(session))
+            if detalhe == SEM_FICHA_LINK and LIMITER_LINKS is not None:
+                espera = max(espera, LIMITER_LINKS.espera_ate() + 1)
             db.schedule_job(session_id, node_id, db.in_seconds_iso(espera),
                             comment_id=comment_id_desta or "")
             db.update_session(session_id, node_id=node_id)

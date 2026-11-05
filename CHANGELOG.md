@@ -12,6 +12,15 @@
   aparece em Leads e no CSV. Só lê, devagar, para no primeiro sinal de limite da Meta
   e nunca marca "segue" quando a Meta não informa. `POST /api/seguidores/reconsultar`
   roda na hora.
+- **Segue a conta: pedido, não muro.** A Condição pede o follow e, depois de pedir
+  (*Pedir pra seguir até*, padrão 1 por sessão), entrega mesmo sem o follow. A Meta não
+  aceita travar conteúdo atrás do follow, e o muro prendia em loop quem a API não
+  mostra como seguidor. `libera_apos: 0` mantém o muro, por escolha explícita.
+- Corrigido: perfil devolvido sem o campo de seguidor era gravado como "não segue"
+  (0); agora fica desconhecido (vazio), como a Condição já previa.
+- **Teto de mensagens com link** (`CEQ_LINKS_HORA`, padrão 60/h): num pico de
+  comentários, a mensagem com URL espera a vez em vez de sair em rajada e fazer o
+  Instagram pausar os links da conta.
 
 ## 1.14.0 (2026-11-04)
 

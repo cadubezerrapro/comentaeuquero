@@ -385,3 +385,96 @@ def test_primeira_resposta_de_comentario_texto_com_botoes_rastreia(ig, monkeypat
     assert "?ceq=" in botoes and botoes.count("ia-thefuture") == 1
     assert db.conn().execute("SELECT node_id FROM links_rastreados WHERE lead_id=?",
                              (lead["id"],)).fetchone()[0] == "n0"
+
+
+# ---------- portão de seguidor: pedido, não muro ----------
+
+def _grafo_portao(libera_apos=None):
+    cond = {"check": "e_seguidor"}
+    if libera_apos is not None:
+        cond["libera_apos"] = libera_apos
+    return {"nodes": [
+        {"id": "n0", "type": "condition", "data": cond},
+        {"id": "pede", "type": "buttons", "data": {"text": "Segue e toca",
+                                                   "buttons": [{"title": "Já segui", "key": "segui"}]}},
+        {"id": "entrega", "type": "text", "data": {"text": "conteudo entregue"}}],
+        "edges": [{"id": "a", "source": "n0", "target": "entrega", "sourceHandle": "sim"},
+                  {"id": "b", "source": "n0", "target": "pede", "sourceHandle": "nao"},
+                  {"id": "c", "source": "pede", "target": "n0", "sourceHandle": "segui"}]}
+
+
+def _nao_segue(monkeypatch):
+    monkeypatch.setattr(instagram, "fetch_profile",
+                        lambda *a, **k: {"username": "x", "is_user_follow_business": False})
+
+
+def test_portao_pede_uma_vez_e_depois_entrega(ig, monkeypatch):
+    acc, env = ig
+    _nao_segue(monkeypatch)
+    lead = _roda(acc, _grafo_portao())
+    assert [e[0] for e in env] == ["botoes"]                  # pediu
+    runtime.resume_postback(acc, db.get_lead(lead["id"]), "segui")
+    assert env[-1][1] == "conteudo entregue"                  # entregou mesmo sem follow
+    assert db.conn().execute("SELECT COUNT(*) FROM events WHERE kind='seguidor_liberado'"
+                             ).fetchone()[0] >= 1
+
+
+def test_portao_zero_e_muro_explicito(ig, monkeypatch):
+    acc, env = ig
+    _nao_segue(monkeypatch)
+    lead = _roda(acc, _grafo_portao(libera_apos=0))
+    runtime.resume_postback(acc, db.get_lead(lead["id"]), "segui")
+    assert all(e[1] != "conteudo entregue" for e in env)
+
+
+def test_portao_quem_segue_nem_ve_o_pedido(ig, monkeypatch):
+    acc, env = ig
+    monkeypatch.setattr(instagram, "fetch_profile",
+                        lambda *a, **k: {"username": "x", "is_user_follow_business": True})
+    _roda(acc, _grafo_portao())
+    assert [e[1] for e in env] == ["conteudo entregue"]
+
+
+# ---------- enrich_lead: campo ausente não vira "não segue" ----------
+
+def test_enrich_sem_campo_fica_desconhecido(ig):
+    acc, _ = ig
+    db.touch_lead(acc["id"], "555", "", "z")
+    db.enrich_lead(acc["id"], "555", {"username": "z"})
+    assert db.conn().execute("SELECT is_follower FROM leads WHERE igsid='555'").fetchone()[0] is None
+    db.enrich_lead(acc["id"], "555", {"username": "z", "is_user_follow_business": False})
+    assert db.conn().execute("SELECT is_follower FROM leads WHERE igsid='555'").fetchone()[0] == 0
+
+
+def test_perfil_sem_campo_nao_prende_no_pedido(ig, monkeypatch):
+    acc, env = ig
+    monkeypatch.setattr(instagram, "fetch_profile", lambda *a, **k: {"username": "x"})
+    _roda(acc, _grafo_portao(libera_apos=0))
+    assert [e[1] for e in env] == ["conteudo entregue"]
+
+
+# ---------- balde de mensagens com link ----------
+
+def test_balde_de_links_adia_sem_perder(ig, monkeypatch):
+    acc, env = ig
+    monkeypatch.setattr(runtime, "LIMITER_LINKS", runtime.RateLimiter(1))
+    _roda(acc, _grafo_texto(), "1", "a")
+    _roda(acc, _grafo_texto(), "2", "b")
+    _roda(acc, _grafo_texto(texto="sem link nenhum", link=""), "3", "c")
+    textos = [e[1] for e in env]
+    assert sum("http" in t for t in textos) == 1             # só 1 link por vez
+    assert "sem link nenhum" in textos                        # mensagem sem link passa
+    adiado = db.conn().execute(
+        "SELECT payload FROM events WHERE kind='envio_adiado' ORDER BY id DESC LIMIT 1").fetchone()
+    assert "sem ficha link" in adiado[0]
+    job = db.conn().execute("SELECT run_at FROM jobs WHERE status='pendente' "
+                            "ORDER BY id DESC LIMIT 1").fetchone()
+    assert job and job[0] > db.in_seconds_iso(600)            # espera a vez, não martela
+
+
+def test_balde_de_links_desligado(ig, monkeypatch):
+    acc, env = ig
+    monkeypatch.setattr(runtime, "LIMITER_LINKS", None)
+    for i in range(3):
+        _roda(acc, _grafo_texto(), str(10 + i), f"p{i}")
+    assert sum("http" in e[1] for e in env) == 3

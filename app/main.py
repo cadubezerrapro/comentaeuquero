@@ -1438,6 +1438,7 @@ ROTULOS_LOG = {
     "mcp_ferramenta": "Uso pelo Claude (MCP)", "mcp_acesso_autorizado": "Claude autorizado",
     "link_clique": "Abriu o link", "link_rastreado_erro": "Erro no link rastreado",
     "deixou_de_seguir": "Deixou de seguir", "voltou_a_seguir": "Voltou a seguir",
+    "seguidor_liberado": "Entregue sem follow (já pediu)",
     "reconsulta_seguidores": "Reconsulta de seguidores",
     "reconsulta_freio": "Reconsulta parada pela Meta", "reconsulta_erro": "Erro na reconsulta",
 }
@@ -1448,7 +1449,8 @@ GRUPOS_LOG = {
                "public_reply_pulada", "envio_adiado", "fora_da_janela", "throttle_meta"),
     "fluxos": ("fluxo_inicio", "fluxo_postback", "fluxo_quick_reply", "fluxo_resposta",
                "fluxo_lido", "fluxo_split", "sem_keyword", "link_clique",
-               "deixou_de_seguir", "voltou_a_seguir", "reconsulta_seguidores"),
+               "deixou_de_seguir", "voltou_a_seguir", "reconsulta_seguidores",
+               "seguidor_liberado"),
     "webhooks": ("webhook", "webhook_recusado", "webhook_sem_conta", "subscribe_webhooks"),
     "conta": ("oauth_ok", "oauth_erro", "token_refresh", "token_invalido",
               "config_alterada", "senha_definida", "login_falhou", "login_por_http",

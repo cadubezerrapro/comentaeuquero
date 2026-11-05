@@ -64,5 +64,5 @@ No **Painel**, a **Atividade recente** mostra o que chegou e o que foi enviado. 
 ## Para ir além
 
 - Variações do texto: o bloco Mensagem aceita outras versões da mesma mensagem, enviadas em rodízio ou sorteadas.
-- Só para quem segue: um bloco **Condição** com "segue a conta" manda quem segue para um lado e quem não segue para outro.
+- Pedir para seguir: um bloco **Condição** com "segue a conta" manda quem segue direto para o conteúdo e pede o follow para quem não segue. Depois de pedir, o conteúdo sai mesmo sem o follow: travar a entrega atrás do follow vai contra a política da Meta.
 - [Etiquetas e campos](./etiquetas-e-campos.md) para saber depois quem pegou o quê.

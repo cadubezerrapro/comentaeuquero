@@ -30,6 +30,7 @@ Todas as variáveis que a instância lê. Depois de mudar o `.env`, rode `docker
 | Variável | Padrão | Para quê |
 |---|---|---|
 | `CEQ_ENVIOS_HORA` | `180` | Teto inicial de envios por hora. Depois de ajustado em Configurações (de 10 a 750), vale o do painel. |
+| `CEQ_LINKS_HORA` | `60` | Teto de mensagens com URL no texto por hora. A Meta segura os links da conta quando muitos saem em pouco tempo (o limite dela não é publicado; este valor é conservador). Passou do teto, a mensagem espera a vez, não se perde. `0` desliga. |
 
 ## Rastreamento
 

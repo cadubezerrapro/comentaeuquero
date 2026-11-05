@@ -958,6 +958,17 @@ def touch_lead(account_id, igsid, keyword="", username=""):
     return dict(r)
 
 
+def _segue_do_perfil(profile: dict):
+    """1 segue, 0 não segue, None a Meta não informou. Antes o campo ausente virava 0
+    e quem seguia de verdade ficava preso no "segue a conta" pedindo de novo."""
+    valor = (profile or {}).get("is_user_follow_business")
+    if valor is True:
+        return 1
+    if valor is False:
+        return 0
+    return None
+
+
 def enrich_lead(account_id, igsid, profile: dict):
     conn().execute(
         """UPDATE leads SET username=COALESCE(NULLIF(?, ''), username), name=?, profile_pic=?,
@@ -965,7 +976,7 @@ def enrich_lead(account_id, igsid, profile: dict):
            WHERE account_id=? AND igsid=?""",
         (profile.get("username", ""), profile.get("name", ""), profile.get("profile_pic", ""),
          profile.get("follower_count"),
-         1 if profile.get("is_user_follow_business") else 0,
+         _segue_do_perfil(profile),
          account_id, str(igsid)))
     conn().commit()
 

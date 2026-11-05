@@ -105,15 +105,7 @@ def main():
              any("me segue" in t for _, t in ENVIADAS) and motivo == "esperando_clique",
              f"{motivo} {ENVIADAS}")
 
-        # caso C: clica sem ter seguido -> reconsulta confirma que não segue -> insiste
-        motivo = runtime.resume_postback(acc, lead_b, "ja_sigo")
-        caso("C: clicou sem seguir, leva o 'ainda não te achei' e espera de novo",
-             any("não te achei" in t for _, t in ENVIADAS) and motivo == "esperando_clique",
-             f"{motivo} {ENVIADAS}")
-        caso("C: link NÃO saiu pra quem não segue",
-             not any("link prometido" in t for _, t in ENVIADAS), str(ENVIADAS))
-
-        # caso B2: agora seguiu de verdade e clica de novo -> link sai
+        # caso B2: seguiu de verdade e clica -> reconsulta pega o status novo, link sai
         PERFIL_API["is_user_follow_business"] = True
         motivo = runtime.resume_postback(acc, lead_b, "ja_sigo")
         caso("B2: seguiu no meio do fluxo, reconsulta libera o link",
@@ -121,6 +113,19 @@ def main():
         lead_b = db.get_lead(lead_b["id"])
         caso("B2: status novo ficou gravado no lead", lead_b["is_follower"] == 1,
              str(lead_b["is_follower"]))
+
+        # caso C (1.15.0): pedido, não muro. Clicou sem seguir -> já pediu uma vez,
+        # o conteúdo sai mesmo assim (política da Meta não aceita travar por follow)
+        ENVIADAS.clear()
+        PERFIL_API.update({"username": "caio.naosegue", "is_user_follow_business": False})
+        lead_c = db.touch_lead(acc["id"], "333", "kw", "caio.naosegue")
+        db.enrich_lead(acc["id"], "333", PERFIL_API)
+        runtime.start(acc, flow, db.get_lead(lead_c["id"]), comment_id="c_c")
+        motivo = runtime.resume_postback(acc, db.get_lead(lead_c["id"]), "ja_sigo")
+        caso("C: clicou sem seguir, recebe o link (pedido, não muro)",
+             any("link prometido" in t for _, t in ENVIADAS), f"{motivo} {ENVIADAS}")
+        caso("C: não leva o 'ainda não te achei'",
+             not any("não te achei" in t for _, t in ENVIADAS), str(ENVIADAS))
 
         # caso D: API esconde o perfil (fetch retorna {}) -> na dúvida, libera
         ENVIADAS.clear()

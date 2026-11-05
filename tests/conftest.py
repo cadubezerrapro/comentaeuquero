@@ -109,3 +109,11 @@ def logado_sem_wa(client, monkeypatch):
     c = db.upsert_account(uuid.uuid4().hex, "", "conta_ig", "tok-ig", "2099-01-01T00:00:00Z")
     _so_esta_conta(c["id"])
     return _login(client, monkeypatch)
+
+
+@pytest.fixture(autouse=True)
+def _balde_de_links_folgado(monkeypatch):
+    # o balde de mensagens com link é global do processo: sem isto, a suíte inteira
+    # dividiria 60 fichas e o teste que vier depois ficaria adiado sem motivo
+    from app import runtime
+    monkeypatch.setattr(runtime, "LIMITER_LINKS", runtime.RateLimiter(100000))

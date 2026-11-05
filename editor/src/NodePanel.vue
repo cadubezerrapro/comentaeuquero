@@ -283,6 +283,19 @@ async function addVariacao() {
         <label v-if="d.check === 'campo_igual'">Campo
           <input v-model="d.field" placeholder="email" />
         </label>
+        <template v-if="d.check === 'e_seguidor'">
+          <label>Pedir pra seguir no máximo
+            <div class="linha">
+              <input class="curto" type="number" min="0" v-model.number="d.libera_apos"
+                     placeholder="1" />
+              <span class="unid">vez, depois entrega mesmo assim</span>
+            </div>
+          </label>
+          <p class="dica">Pedir pra seguir pode; <b>travar o conteúdo atrás do follow</b> a
+            Meta não aceita (incentivo a seguir não está entre as ações permitidas) e ainda
+            prende quem a API não mostra como seguidor. Por isso, depois de pedir, o fluxo
+            segue pelo <b>sim</b>. <code>0</code> trava de verdade: não recomendado.</p>
+        </template>
         <label v-if="d.check !== 'e_seguidor'">Valor
           <input v-model="d.value" list="tags-existentes" placeholder="ex: aluna" />
         </label>

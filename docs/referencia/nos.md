@@ -95,7 +95,7 @@ Duas saídas: **sim** e **não**.
 | tem a marcação | A pessoa tem esta etiqueta? |
 | tem o campo preenchido | Este campo tem algum valor? |
 | tem o campo igual a | Este campo é exatamente este valor? |
-| segue a conta | A pessoa segue o seu perfil? (Consulta a Meta na hora. Se a Meta não informar, conta como sim.) |
+| segue a conta | A pessoa segue o seu perfil? Consulta a Meta na hora; se a Meta não informar, conta como sim. **Pedido, não muro:** quem não segue cai no "não" até o fluxo ter pedido o número de vezes de *Pedir pra seguir até* (padrão 1); depois disso segue pelo "sim". A Meta não aceita travar conteúdo atrás do follow. `0` trava de verdade (não recomendado). |
 
 ### Teste A/B (`split`)
 
