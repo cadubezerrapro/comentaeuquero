@@ -54,7 +54,7 @@ Python 3.12 · FastAPI · SQLite · Vue 3 (Vue Flow) · Docker · imagens assina
 
 Distribuído sob a [Sustainable Use License 1.0](LICENSE.md). Você pode usar, modificar e instalar para clientes — não pode hospedar e revender como serviço (SaaS).
 
-Projeto derivado do trabalho original de **Augusto Gobatto**, mantido por [@cadubezerrapro](https://github.com/cadubezerrapro).
+Projeto mantido por **Cadu Bezerra** ([@cadubezerrapro](https://github.com/cadubezerrapro)).
 
 ## Contribuindo
 

@@ -438,8 +438,8 @@ def test_bandeira_falsa_com_frase_longa_nao_passa():
 
 
 @pytest.mark.parametrize("texto,presente", [
-    ("https://golpe.com/?r=https://loja.com/p", False),
-    ("veja https://golpe.com/x#https://loja.com/p", False),
+    ("https://outro-site.com/?r=https://loja.com/p", False),
+    ("veja https://outro-site.com/x#https://loja.com/p", False),
     ("acesse: https://loja.com/p.", True),
     ("(https://loja.com/p)", True),
     ('"https://loja.com/p"', True),

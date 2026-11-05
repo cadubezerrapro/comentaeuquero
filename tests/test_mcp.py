@@ -459,7 +459,7 @@ def test_fluxo_ligado_nao_muda_pelo_claude(conta_ig):
     fid = _no_ar(conta_ig)
     antes = _foto(fid)
     with pytest.raises(F.ErroFerramenta, match=f"Nada foi alterado.*/editor\\?f={fid}"):
-        F.editar_mensagem_do_fluxo(fid, "n1", texto="clique aqui", link="https://golpe.example")
+        F.editar_mensagem_do_fluxo(fid, "n1", texto="clique aqui", link="https://link-externo.example")
     with pytest.raises(F.ErroFerramenta, match="Nada foi alterado"):
         F.editar_mensagem_do_fluxo(fid, "n1", link="")
     with pytest.raises(F.ErroFerramenta, match="Nada foi alterado"):

@@ -17,7 +17,7 @@ def tem_link(texto: str, link: str) -> bool:
     depois dele vier fim, espaço, ou pontuação de fim de frase seguida de fim ou
     espaço ("veja https://loja.com/p." conta; ".../p.html" e ".../p/2" não), e se
     antes dele vier início, espaço ou pontuação de abertura, nunca caractere de
-    URL: em "https://golpe.com/?r=https://loja.com/p" o link é outro."""
+    URL: em "https://outro-site.com/?r=https://loja.com/p" o link é outro."""
     if not link:
         return False
     padrao = (r"(?<![\w/=?&.:%#~+-])" + re.escape(link)

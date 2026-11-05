@@ -27,8 +27,8 @@
 
 ## 1.12.0 (2026-11-03)
 
-Primeira versão deste repositório (cadubezerrapro/comentaeuquero), derivada do
-comenta EU QUERO 1.11.2 de Augusto Gobatto (Licença de Uso Sustentável 1.0).
+Primeira versão deste repositório (cadubezerrapro/comentaeuquero), mantida por
+Cadu Bezerra (Licença de Uso Sustentável 1.0).
 
 - Removida a ativação por `CLUB_TOKEN`: a instância não manda mais ping, versão,
   contagem de leads nem id de instalação para nenhum servidor externo. As únicas
@@ -36,8 +36,8 @@ comenta EU QUERO 1.11.2 de Augusto Gobatto (Licença de Uso Sustentável 1.0).
   o alerta estiver configurado).
 - Removidos `CLUB_TOKEN`, `ACTIVATION_URL`, `CHAO_URL` e `CHAO_VERSAO`, o aviso de
   assinatura no painel e o campo `licenca` do `/health` e do MCP.
-- Removidos o `docker-compose.club.yml` (watchtower apontando para a imagem do
-  autor original), o site de divulgação e o script de exportação interno.
+- Removidos o `docker-compose.club.yml` (watchtower apontando para imagem externa),
+  o site de divulgação e o script de exportação interno.
 - Tutoriais movidos para `docs/`, sem o instalador externo.
 - Imagem Docker publicada em `ghcr.io/cadubezerrapro/comentaeuquero`.
 
