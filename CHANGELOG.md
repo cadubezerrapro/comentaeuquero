@@ -21,6 +21,8 @@
 - **Teto de mensagens com link** (`CEQ_LINKS_HORA`, padrão 60/h): num pico de
   comentários, a mensagem com URL espera a vez em vez de sair em rajada e fazer o
   Instagram pausar os links da conta.
+- Editor de fluxos ganha o botão de tema claro/escuro no pé da lateral, o mesmo do
+  painel (a escolha vale nos dois).
 
 ## 1.14.0 (2026-11-04)
 

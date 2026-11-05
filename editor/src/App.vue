@@ -20,6 +20,15 @@ const { onConnect, addEdges, project, vueFlowRef, fitView, onNodesInitialized,
 // apareca com o card ocupando meia tela.
 onNodesInitialized(() => fitView({ maxZoom: 1, padding: 0.25 }))
 
+// tema: mesma chave e mesma regra do painel (base.html), pra trocar aqui e lá
+// continuar igual. O script do index.html já aplicou antes de pintar.
+const escuro = ref(document.documentElement.classList.contains('dark'))
+function alternaTema() {
+  escuro.value = !escuro.value
+  document.documentElement.classList.toggle('dark', escuro.value)
+  try { localStorage.setItem('blocos_tema', escuro.value ? 'escuro' : 'claro') } catch (_) {}
+}
+
 const fluxos = ref([])
 const fluxoAtual = ref(null)
 const nodes = ref([])
@@ -469,6 +478,20 @@ onMounted(async () => {
           </button>
         </div>
       </section>
+
+      <div class="lateral-pe">
+        <button class="btn-tema" @click="alternaTema" :aria-pressed="escuro"
+                :title="escuro ? 'mudar pro tema claro' : 'mudar pro tema escuro'">
+          <svg v-if="!escuro" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          {{ escuro ? 'Tema claro' : 'Tema escuro' }}
+        </button>
+      </div>
     </aside>
 
     <main class="centro">
@@ -749,8 +772,21 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 /* lateral */
 .lateral {
   width: 232px; background: var(--painel); border-right: 1px solid var(--line);
-  overflow-y: auto; flex: none;
+  overflow-y: auto; flex: none; display: flex; flex-direction: column;
 }
+/* o botão de tema mora no pé, como no painel, e fica preso ali: com a lateral
+   comprida (muitos fluxos, tela baixa) ele não some no fim da rolagem */
+.lateral-pe {
+  margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--line);
+  position: sticky; bottom: 0; background: var(--painel); z-index: 1;
+}
+.btn-tema {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--suave);
+  font-size: 13px; font-weight: 500; cursor: pointer; margin: 0;
+  transition: background .15s, color .15s;
+}
+.btn-tema:hover { background: var(--texto-4); color: var(--texto); }
 .bloco { padding: 16px; border-bottom: 1px solid var(--line); }
 .bloco-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .voltar {
