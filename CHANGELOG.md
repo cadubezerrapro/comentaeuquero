@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.17.1 (2026-11-06)
+
+Revisão de segurança (método da skill security-audit da Cloudflare) e teste de ponta a
+ponta pela porta HTTP real com webhook assinado: 21 de 21 passos.
+
+- **Horário local nas telas:** Leads, "deixou de seguir" e "Entregas por dia" do Painel
+  mostravam UTC (3 horas adiantado). Agora seguem o mesmo fuso dos Logs
+  (`CEQ_FUSO_HORAS`, padrão -3).
+- **Nenhum segredo em log de erro:** os seis logs genéricos (worker, transmissão,
+  reconsulta, IA, webhook do fluxo, link rastreado) passam pelo limpador de segredos,
+  que agora pega também token, key, secret, password e signature em qualquer URL.
+- Dependências sem vulnerabilidade conhecida (pip-audit e npm audit), nenhum segredo no
+  código nem no histórico do git.
+
 ## 1.17.0 (2026-11-06)
 
 - **Link mágico:** com `LINK_MAGICO_SEGREDO` (o mesmo na Vercel do ia_thefuture), link

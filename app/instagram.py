@@ -92,7 +92,8 @@ def _conta_e_token(conta_ou_token):
 
 
 _SEGREDO_NA_URL = re.compile(
-    r"(?i)((?:client_secret|access_token|fb_exchange_token|code)=)[^&\s\"')>]+")
+    r"(?i)((?:client_secret|access_token|fb_exchange_token|code|[a-z_]*token|[a-z_]*key|"
+    r"[a-z_]*secret|password|senha|sig|signature)=)[^&\s\"')>]+")
 
 
 def sem_segredo(erro) -> str:

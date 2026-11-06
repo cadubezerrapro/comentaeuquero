@@ -860,8 +860,13 @@ def stats():
     env, ini = list(KINDS_ENVIO), list(KINDS_INICIO)
     total = c.execute(
         f"SELECT COUNT(*) FROM events WHERE kind IN {_em(env)} AND ok=1", env).fetchone()[0]
+    # dia no fuso do painel (CEQ_FUSO_HORAS, -3): envio das 22h vira o dia certo
+    try:
+        fuso = int(os.environ.get("CEQ_FUSO_HORAS", "") or -3)
+    except ValueError:
+        fuso = -3
     per_day = c.execute(
-        f"""SELECT substr(ts,1,10) d, COUNT(*) n FROM events
+        f"""SELECT substr(datetime(ts, '{fuso:+d} hours'),1,10) d, COUNT(*) n FROM events
             WHERE kind IN {_em(env)} AND ok=1
             GROUP BY d ORDER BY d DESC LIMIT 14""", env).fetchall()
     # por palavra-chave e por origem saem do início do fluxo, não do envio: um fluxo

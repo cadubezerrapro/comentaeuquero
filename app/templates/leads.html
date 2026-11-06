@@ -85,7 +85,7 @@
           <a class="celula" href="{{ com('segue', '1') }}"><span class="dot ok"></span>sim</a>
         {% elif l.is_follower == 0 %}
           <a class="celula" href="{{ com('segue', '0') }}"><span class="dot mut"></span>não</a>
-          {% if l.deixou_de_seguir_em %}<br><span class="sub" title="a reconsulta viu a pessoa deixar de seguir">deixou em {{ l.deixou_de_seguir_em[8:10] }}/{{ l.deixou_de_seguir_em[5:7] }}</span>{% endif %}
+          {% if l.deixou_de_seguir_em %}<br><span class="sub" title="a reconsulta viu a pessoa deixar de seguir">deixou em {{ l.deixou_de_seguir_em | dia_local }}</span>{% endif %}
         {% else %}—{% endif %}
       </td>
       <td>
@@ -95,7 +95,7 @@
       </td>
       {% if wa_ativo() %}<td>{% if l.wa_id %}+{{ l.wa_id }}{% if l.wa_optout_em %} <span class="sub">saiu</span>{% endif %}{% endif %}</td>{% endif %}
       <td class="num">{{ l.interactions }}</td>
-      <td class="num">{{ (l.last_ts or l.first_ts)[8:10] }}/{{ (l.last_ts or l.first_ts)[5:7] }} {{ (l.last_ts or l.first_ts)[11:16] }}</td>
+      <td class="num">{{ (l.last_ts or l.first_ts) | local }}</td>
       <td>
         {# exclusão a pedido da pessoa: some o lead, as tags e os campos capturados #}
         <form method="post" action="/leads/{{ l.id }}/apagar"

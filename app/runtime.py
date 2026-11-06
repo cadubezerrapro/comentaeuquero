@@ -354,7 +354,8 @@ def _enviar(account, session, node, lead, recipient):
     try:
         node, trocas = _com_links_rastreados(account, session, node, lead)
     except Exception as e:   # rastreio nunca pode impedir a mensagem de sair
-        db.log_event("link_rastreado_erro", account.get("id"), payload={"erro": str(e)[:200]})
+        db.log_event("link_rastreado_erro", account.get("id"),
+                     payload={"erro": instagram.sem_segredo(e)[:200]})
         trocas = []
     tipo = node.get("type")
     data = node.get("data") or {}
@@ -646,7 +647,7 @@ def _chama_webhook(data, lead, session):
         # o corpo de erro do servidor remoto não entra: só o código
         return {"status": r.status_code}
     except requests.RequestException as e:
-        return {"erro": str(e)[:200]}
+        return {"erro": instagram.sem_segredo(e)[:200]}
 
 
 def _int_env(nome, padrao):
@@ -943,7 +944,7 @@ def _responde_ia(data, lead, session, cortes=None):
             return texto.strip(), "ok"
         return fallback, f"http {r.status_code}"
     except requests.RequestException as e:
-        return fallback, str(e)[:120]
+        return fallback, instagram.sem_segredo(e)[:120]
 
 
 # ---------- execução ----------
@@ -1452,7 +1453,7 @@ def tick(account_por_id=None):
         from . import transmissao
         feitos += transmissao.tick()
     except Exception as e:
-        db.log_event("transmissao_erro", payload={"erro": str(e)[:300]})
+        db.log_event("transmissao_erro", payload={"erro": instagram.sem_segredo(e)[:300]})
 
     return feitos
 
@@ -1462,5 +1463,5 @@ def worker_loop(intervalo=5):
         try:
             tick()
         except Exception as e:                      # nunca derrubar o worker
-            db.log_event("worker_erro", payload={"erro": str(e)[:300]})
+            db.log_event("worker_erro", payload={"erro": instagram.sem_segredo(e)[:300]})
         time.sleep(intervalo)

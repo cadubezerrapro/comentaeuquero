@@ -153,5 +153,5 @@ def loop(checar_a_cada_s=600):
             if vencida():
                 rodar_todas()
         except Exception as e:                      # nunca derrubar a thread
-            db.log_event("reconsulta_erro", payload={"erro": str(e)[:300]})
+            db.log_event("reconsulta_erro", payload={"erro": instagram.sem_segredo(e)[:300]})
         time.sleep(checar_a_cada_s)

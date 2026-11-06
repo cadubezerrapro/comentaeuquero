@@ -120,7 +120,7 @@ def _int_env(nome, padrao=0):
 RETENCAO_LEADS_DIAS = _int_env("RETENCAO_LEADS_DIAS")
 RETENCAO_EVENTOS_DIAS = _int_env("RETENCAO_EVENTOS_DIAS")
 # Versão do produto. Sobe junto com mudança que o dono da instância percebe.
-VERSAO = "1.17.0"
+VERSAO = "1.17.1"
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -200,6 +200,26 @@ def _fmt_k(n):
 
 
 templates.env.filters["fmt_k"] = _fmt_k
+
+# Fuso das telas. O banco guarda UTC; o painel mostra no horário de quem usa. Brasil
+# sem horário de verão desde 2019: -3 fixo, igual ao que os Logs já faziam.
+FUSO_HORAS = _int_env("CEQ_FUSO_HORAS", -3)
+
+
+def _local(iso, formato="%d/%m %H:%M"):
+    """'2026-11-06T12:36:00Z' -> '06/11 09:36' (no fuso do painel). Vazio -> ''."""
+    if not iso:
+        return ""
+    import datetime as _dt
+    try:
+        t = _dt.datetime.strptime(str(iso)[:19].replace(" ", "T"), "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return str(iso)
+    return (t + _dt.timedelta(hours=FUSO_HORAS)).strftime(formato)
+
+
+templates.env.filters["local"] = _local
+templates.env.filters["dia_local"] = lambda iso: _local(iso, "%d/%m")
 
 
 def wa_ativo() -> bool:
@@ -1491,7 +1511,7 @@ def logs_page(request: Request, grupo: str = "", busca: str = "", antes: int = 0
     account = db.first_account()
     grupo = grupo if grupo in GRUPOS_LOG else ""
     por_pagina = 100
-    sql = ("SELECT id, datetime(ts, '-3 hours') AS hora, kind, rule_keyword, source, ok, "
+    sql = (f"SELECT id, datetime(ts, '{FUSO_HORAS:+d} hours') AS hora, kind, rule_keyword, source, ok, "
            "who, payload FROM events WHERE 1=1")
     args = []
     if account:
