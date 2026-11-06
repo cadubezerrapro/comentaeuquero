@@ -12,13 +12,33 @@ import { posicionar } from './layout.js'
 import { NOMES_GATILHO, gatilhosDisponiveis, paleta } from './tipos'
 
 const { onConnect, addEdges, project, vueFlowRef, fitView, onNodesInitialized,
-        updateNodeData, getSelectedEdges } = useVueFlow()
+        updateNodeData, getSelectedEdges, viewport, setViewport, getNodes,
+        dimensions } = useVueFlow()
 
 // enquadra quando o Vue Flow JA MEDIU os nos. Fazer isso antes (no nextTick) nao
 // funciona: sem tamanho conhecido, o calculo do enquadramento sai errado e o fluxo
 // nasce encostado no canto. O teto de 1:1 evita que um fluxo de um passo so
 // apareca com o card ocupando meia tela.
-onNodesInitialized(() => fitView({ maxZoom: 1, padding: 0.25 }))
+// Fluxo comprido cabia na tela só a 25-30%: os passos viravam miniatura ilegível.
+// Abaixo de LEGIVEL, abre a 75% com o começo do fluxo (o gatilho) na esquerda; o
+// resto se vê arrastando ou no botão de ajustar, como nos editores de automação.
+const LEGIVEL = 0.6
+const ZOOM_LEITURA = 0.75
+async function enquadrar() {
+  await fitView({ maxZoom: 1, padding: 0.25 })
+  const ns = getNodes.value
+  if (viewport.value.zoom >= LEGIVEL || !ns.length) return
+  const x = n => (n.computedPosition || n.position).x
+  const y = n => (n.computedPosition || n.position).y
+  const inicio = Math.min(...ns.map(x))
+  const coluna = ns.filter(n => x(n) < inicio + 700)
+  const meios = coluna.map(n => y(n) + (n.dimensions?.height || 0) / 2)
+  const meio = (Math.min(...meios) + Math.max(...meios)) / 2
+  setViewport({ x: 56 - inicio * ZOOM_LEITURA,
+                y: dimensions.value.height / 2 - meio * ZOOM_LEITURA,
+                zoom: ZOOM_LEITURA })
+}
+onNodesInitialized(() => { enquadrar() })
 
 // tema: mesma chave e mesma regra do painel (base.html), pra trocar aqui e lá
 // continuar igual. O script do index.html já aplicou antes de pintar.
@@ -583,20 +603,28 @@ onMounted(async () => {
                   :aria-checked="!!t.active">
             <span class="bolinha"></span>
           </button>
-          <div>
-            <b>{{ NOMES_GATILHO[t.type] || t.type }}</b>
-            <template v-if="t.keywords.length">
-              <span class="pill" v-for="k in t.keywords" :key="k">{{ k }}</span>
-            </template>
-            <span v-else class="obs">qualquer texto</span>
-            <div v-if="t.media_ids.length" class="obs">
-              só em {{ t.media_ids.length }} post{{ t.media_ids.length > 1 ? 's' : '' }}
+          <div class="g-corpo">
+            <div class="g-tit">
+              {{ NOMES_GATILHO[t.type] || t.type }}
+              <span v-if="t.media_ids.length" class="g-escopo">
+                só em {{ t.media_ids.length }} post{{ t.media_ids.length > 1 ? 's' : '' }}
+              </span>
             </div>
-            <div v-for="(r, i) in t.public_replies || []" :key="i" class="obs">
-              responde no comentário: “{{ r }}”
+            <div class="g-pills">
+              <template v-if="t.keywords.length">
+                <span class="pill" v-for="k in t.keywords" :key="k">{{ k }}</span>
+              </template>
+              <span v-else class="obs">qualquer texto</span>
+            </div>
+            <div v-if="(t.public_replies || []).length" class="g-respostas">
+              <span class="g-rot">
+                responde no comentário{{ t.public_replies.length > 1 ? ', em rodízio' : '' }}
+              </span>
+              <q v-for="(r, i) in t.public_replies" :key="i">{{ r }}</q>
             </div>
           </div>
-          <button class="perigo" @click="apagarGatilho(t.id)">remover</button>
+          <button class="perigo g-remover" @click="apagarGatilho(t.id)"
+                  :aria-label="'remover gatilho ' + (NOMES_GATILHO[t.type] || t.type)">remover</button>
         </li>
         <li v-if="!(fluxoAtual.triggers || []).length" class="nada">
           Sem gatilho, este fluxo não começa sozinho.
@@ -615,7 +643,7 @@ onMounted(async () => {
           <input v-model="novoGatilho.keywords" placeholder="texto do botão" />
         </label>
         <label v-else>Palavras-chave <span class="sub">separadas por vírgula; vazio vale pra qualquer texto</span>
-          <input v-model="novoGatilho.keywords" placeholder="aurora, quero aurora" />
+          <input v-model="novoGatilho.keywords" placeholder="quero, eu quero" />
         </label>
 
         <template v-if="['comment', 'live_comment'].includes(novoGatilho.type)">
@@ -932,24 +960,58 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .x:hover { background: var(--texto-4); color: var(--texto); opacity: 1; }
 .gatilhos { list-style: none; margin: 0; padding: 6px 20px; }
 .gatilhos li.off { opacity: .5; }
+/* interruptor. O estilo global de button centraliza o conteúdo e põe borda: sem
+   resetar aqui a bolinha nascia no meio e o deslocamento a jogava pra fora do trilho */
 .chave {
-  flex: none; width: 34px; height: 20px; border-radius: 999px; padding: 0;
-  background: var(--line); border: none; cursor: pointer; margin: 0;
-  transition: background .15s ease;
+  position: relative; display: inline-block; flex: none;
+  width: 36px; height: 20px; min-width: 36px; padding: 0; margin: 2px 0 0;
+  border: 0; border-radius: 999px; cursor: pointer;
+  background: color-mix(in srgb, var(--texto) 22%, transparent);
+  transition: background .18s ease;
 }
+.chave:hover { opacity: 1; background: color-mix(in srgb, var(--texto) 30%, transparent); }
 .chave .bolinha {
-  display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--fundo);
-  margin-left: 2px; transition: transform .15s ease;
-  box-shadow: 0 1px 2px rgba(17, 17, 19, .25);
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .28);
+  transition: transform .18s cubic-bezier(.3, .7, .4, 1);
 }
 .chave.on { background: var(--ok); }
-.chave.on .bolinha { transform: translateX(14px); }
+.chave.on:hover { background: color-mix(in srgb, var(--ok) 88%, var(--texto)); }
+.chave.on .bolinha { transform: translateX(16px); }
 .chave:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .gatilhos li {
-  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
-  padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 13px;
 }
+/* o corpo cresce: sem isso o space-between centralizava gatilho de texto curto e
+   ele ficava desalinhado do de cima */
+.g-corpo { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.g-tit { font-weight: 600; font-size: 13.5px; line-height: 20px; color: var(--texto); }
+.g-escopo { font-weight: 400; color: var(--mut); margin-left: 6px; }
+.g-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.g-pills .pill { margin: 0; }
+.g-respostas {
+  display: grid; gap: 4px; padding: 8px 10px; border-radius: 6px;
+  background: var(--texto-4); color: var(--suave); font-size: 12.5px; line-height: 1.45;
+}
+.g-rot { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; color: var(--mut); }
+/* pretty: o emoji do fim não fica sozinho na linha de baixo com a aspa */
+.g-respostas q { color: var(--texto); text-wrap: pretty; overflow-wrap: anywhere; }
+.g-respostas q::before { content: '“'; color: var(--mut); }
+.g-respostas q::after { content: '”'; color: var(--mut); }
+.g-remover { flex: none; line-height: 20px; border-radius: 4px; }
+.g-remover:hover { background: color-mix(in srgb, var(--erro) 8%, transparent); opacity: 1; }
+.gatilhos li.nada { color: var(--mut); justify-content: center; padding: 18px 0; }
+/* botão secundário pra "adicionar": o .add do painel de passos é scoped e aqui
+   o botão caía no preto padrão, com o mesmo peso do "Adicionar gatilho" */
+.novo .add {
+  margin-top: 8px; height: 32px; padding: 0 12px; font-size: 13px;
+  background: none; color: var(--suave); border: 1px dashed var(--line);
+}
+.novo .add:hover { border-color: var(--suave); color: var(--texto); opacity: 1; }
+.novo .resposta { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.novo .resposta input { flex: 1; margin-top: 0; }
 .gatilhos li:last-child { border-bottom: none; }
 .novo { padding: 4px 20px 20px; }
 .novo label { display: block; font-size: 13px; font-weight: 500; margin-top: 16px; }

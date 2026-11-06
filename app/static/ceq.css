@@ -277,7 +277,32 @@ textarea { height: auto; min-height: 92px; padding: 8px 12px; resize: vertical; 
 input[type=file] { display: block; margin-top: 8px; font: inherit; font-size: 13px; color: var(--suave); max-width: 100%; }
 input:focus, select:focus, textarea:focus { border-color: var(--acento); box-shadow: 0 0 0 3px var(--acento-25); }
 input:disabled { opacity: .6; }
-input[type=checkbox], input[type=radio] { accent-color: var(--texto); width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px; }
+/* caixa e rádio no dialeto do app (iguais aos do editor): o accent-color sozinho
+   deixava o desmarcado cinza-padrão do navegador, fora do tema escuro */
+input[type=checkbox], input[type=radio] {
+  appearance: none; -webkit-appearance: none; flex: none;
+  width: 16px; height: 16px; margin: 0 8px 0 0; padding: 0; vertical-align: -3px;
+  border: 1.5px solid var(--suave); background: var(--fundo); cursor: pointer;
+  display: inline-grid; place-content: center; transition: background .12s, border-color .12s;
+}
+input[type=checkbox] { border-radius: 4px; }
+input[type=radio] { border-radius: 50%; }
+input[type=checkbox]::after {
+  content: ''; width: 9px; height: 5px; margin-top: -2px;
+  border: solid var(--fundo); border-width: 0 0 2px 2px; transform: rotate(-45deg) scale(0);
+  transition: transform .12s ease;
+}
+input[type=radio]::after {
+  content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--fundo);
+  transform: scale(0); transition: transform .12s ease;
+}
+input[type=checkbox]:checked, input[type=radio]:checked { background: var(--texto); border-color: var(--texto); }
+input[type=checkbox]:checked::after { transform: rotate(-45deg) scale(1); }
+input[type=radio]:checked::after { transform: scale(1); }
+input[type=checkbox]:hover:not(:checked):not(:disabled),
+input[type=radio]:hover:not(:checked):not(:disabled) { border-color: var(--texto); }
+input[type=checkbox]:disabled, input[type=radio]:disabled { opacity: .45; cursor: default; }
+input[type=checkbox]:focus-visible, input[type=radio]:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
 label.check { font-weight: 400; display: flex; align-items: flex-start; gap: 0; }
 label.check input { margin-top: 2px; flex: none; }
 .campo-curto { max-width: 160px; }
@@ -289,7 +314,18 @@ details li { margin-bottom: 8px; }
 
 .baixar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .baixar label { font-size: 13px; color: var(--suave); display: flex; gap: 8px; align-items: center; margin: 0; font-weight: 400; }
-.baixar input, .baixar select { margin-top: 0; width: auto; }
+/* inline-block: a regra base dos campos é display:block, e block com width:auto
+   ocupa a linha inteira; os dois seletores saíam um embaixo do outro em largura total */
+.baixar input, .baixar select { margin-top: 0; width: auto; display: inline-block; }
+/* quem aparece é o dropdown do ceq-ui.js (button.ceqk-sel, largura 100%), não o
+   <select>: é nele que a largura tem que mudar pra ficar tudo numa linha */
+.baixar button.ceqk-sel { width: auto; min-width: 13rem; margin-top: 0; }
+.baixar button { margin-top: 0; }
+@media (max-width: 640px) {
+  .baixar label { flex: 1 1 100%; }
+  .baixar label input { flex: 1; }
+  .baixar button.ceqk-sel, .baixar button[type=submit] { width: 100%; }
+}
 
 /* ---- botões (BOTAO_PRIMARIO / BOTAO_SECUNDARIO do Blocos) ---- */
 button, .btn {

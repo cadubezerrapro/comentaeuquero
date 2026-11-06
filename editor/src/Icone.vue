@@ -31,6 +31,8 @@ const FORMAS = {
   // interface
   fechar: 'M18 6 6 18M6 6l12 12',
   voltar: 'M19 12H5M11 18l-6-6 6-6',
+  // apagar
+  lixo: 'M4 7h16M10 11v6M14 11v6M5.5 7l1 12a1.5 1.5 0 0 0 1.5 1.4h8a1.5 1.5 0 0 0 1.5-1.4l1-12M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7',
   mais: 'M12 5v14M5 12h14',
 }
 

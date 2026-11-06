@@ -10,6 +10,28 @@ const emit = defineEmits(['fechar', 'apagar'])
 
 const d = computed(() => props.node.data)
 
+// Agendar: o motor guarda UTC (run_at ISO com Z). A tela mostra e recebe no fuso de
+// quem edita: digitar "2026-12-01T14:00:00Z" à mão era fácil de errar em 3 horas.
+const FUSO = Intl.DateTimeFormat().resolvedOptions().timeZone || 'seu fuso'
+const agendaLocal = computed({
+  get() {
+    const v = d.value.run_at
+    if (!v) return ''
+    const dt = new Date(v)
+    if (Number.isNaN(dt.getTime())) return ''
+    return new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  },
+  set(v) {
+    const dt = v ? new Date(v) : null      // "AAAA-MM-DDTHH:MM" é lido no fuso local
+    d.value.run_at = dt && !Number.isNaN(dt.getTime())
+      ? dt.toISOString().replace(/\.\d{3}Z$/, 'Z') : ''
+  },
+})
+const agendaPassou = computed(() => {
+  const t = Date.parse(d.value.run_at || '')
+  return !Number.isNaN(t) && t < Date.now()
+})
+
 // Limites da Meta que aparecem na tela. O do botão é recomendação: passando disso o
 // app corta na hora de desenhar, e quem escreveu não fica sabendo.
 const MAX_BOTAO = 20
@@ -181,9 +203,13 @@ async function addVariacao() {
           <textarea v-cresce v-model="d.text" rows="4"></textarea>
         </label>
         <h2>Opções <span class="sub">até 13</span></h2>
-        <div v-for="(o, i) in d.options || []" :key="i" class="item linha">
-          <input v-model="o.title" placeholder="Texto" maxlength="20" />
-          <input v-model="o.key" placeholder="apelido" />
+        <div v-for="(o, i) in d.options || []" :key="i" class="item">
+          <label class="rotulo">Texto que a pessoa vê
+            <input v-model="o.title" placeholder="ex: Quero mais 🔥" maxlength="20" />
+          </label>
+          <label class="rotulo"><span>Apelido da saída <span class="sub">liga no próximo passo</span></span>
+            <input v-model="o.key" placeholder="ex: mais" />
+          </label>
           <button class="perigo" @click="d.options.splice(i, 1)">remover</button>
         </div>
         <button class="add" @click="addOpcao">adicionar opção</button>
@@ -242,9 +268,13 @@ async function addVariacao() {
 
       <!-- AGENDAR -->
       <template v-else-if="node.type === 'schedule'">
-        <label>Continuar em <span class="sub">data e hora, em UTC</span>
-          <input v-model="d.run_at" placeholder="2026-08-01T14:00:00Z" />
+        <label>Continuar em <span class="sub">no seu fuso ({{ FUSO }})</span>
+          <input type="datetime-local" v-model="agendaLocal" />
         </label>
+        <p class="dica" v-if="agendaPassou">Essa data já passou: quem chegar aqui segue
+          direto pro próximo passo.</p>
+        <p class="dica" v-else>A janela de 24h do Instagram continua valendo: agendar pra
+          depois dela, a mensagem não sai.</p>
       </template>
 
       <!-- ESPERAR RESPOSTA -->
@@ -323,11 +353,12 @@ async function addVariacao() {
             <option value="remove_tag">tirar a marcação</option>
             <option value="set_field">guardar um valor</option>
           </select>
-          <input v-if="a.action !== 'set_field'" v-model="a.tag" list="tags-existentes"
-                 placeholder="nome da marcação" />
+          <label v-if="a.action !== 'set_field'" class="rotulo">Marcação
+            <input v-model="a.tag" list="tags-existentes" placeholder="ex: isca_viral" />
+          </label>
           <template v-else>
-            <input v-model="a.key" placeholder="nome do campo" />
-            <input v-model="a.value" placeholder="valor" />
+            <label class="rotulo">Campo <input v-model="a.key" placeholder="ex: origem" /></label>
+            <label class="rotulo">Valor <input v-model="a.value" placeholder="ex: reel_viral" /></label>
           </template>
           <button class="perigo" @click="d.actions.splice(i, 1)">remover</button>
         </div>
@@ -424,14 +455,43 @@ async function addVariacao() {
     </div>
 
     <footer>
-      <button class="quieto largo" @click="emit('apagar', node.id)">Apagar este passo</button>
+      <button class="apagar largo" @click="emit('apagar', node.id)">
+        <Icone nome="lixo" :tamanho="14" /> Apagar este passo
+      </button>
     </footer>
   </aside>
 </template>
 
 <style scoped>
-.caixa { display: flex; flex-direction: row; align-items: center; gap: 8px; }
-.caixa input { width: auto; }
+.caixa {
+  display: flex; flex-direction: row; align-items: flex-start; gap: 10px;
+  font-weight: 400; line-height: 1.4; cursor: pointer; color: var(--texto);
+}
+/* caixa de seleção no dialeto do app: a nativa saía cinza e fora do tema */
+.caixa input[type=checkbox] {
+  appearance: none; -webkit-appearance: none; flex: none; width: 16px; height: 16px;
+  min-height: 0; margin: 1px 0 0; padding: 0; border: 1.5px solid var(--suave); border-radius: 4px;
+  background: var(--fundo); display: grid; place-content: center; cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.caixa input[type=checkbox]::after {
+  content: ''; width: 9px; height: 5px; margin-top: -2px;
+  border: solid var(--fundo); border-width: 0 0 2px 2px; transform: rotate(-45deg) scale(0);
+  transition: transform .12s ease;
+}
+.caixa input[type=checkbox]:checked { background: var(--texto); border-color: var(--texto); }
+.caixa input[type=checkbox]:checked::after { transform: rotate(-45deg) scale(1); }
+.caixa input[type=checkbox]:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.caixa:hover input[type=checkbox]:not(:checked) { border-color: var(--texto); }
+/* rótulo pequeno dentro dos itens (opção, ação): sem ele "A" e "a" eram dois
+   campos iguais e ninguém sabia qual era o texto e qual era a saída */
+label.rotulo {
+  display: grid; gap: 4px; margin-top: 0;
+  font-size: 11.5px; font-weight: 500; color: var(--suave);
+}
+label.rotulo .sub { display: inline; font-weight: 400; color: var(--mut); }
+.item label.rotulo input { margin-top: 0; }
+input[type=datetime-local] { color-scheme: inherit; }
 .painel {
   width: 336px; flex: none; background: var(--fundo); border-left: 1px solid var(--line);
   display: flex; flex-direction: column; height: 100%;
@@ -490,5 +550,12 @@ details summary {
   font-size: 12.5px; color: var(--mut); cursor: pointer; margin: 18px 0 8px;
 }
 footer { padding: 14px 16px; border-top: 1px solid var(--line); }
+.apagar {
+  background: none; color: var(--err); border: 1px solid var(--line); font-size: 13px;
+}
+.apagar:hover {
+  opacity: 1; background: color-mix(in srgb, var(--erro) 8%, transparent);
+  border-color: color-mix(in srgb, var(--erro) 40%, transparent);
+}
 .largo { width: 100%; }
 </style>

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.15.1 (2026-11-05)
+
+Acabamento da interface, revisado tela a tela nos temas claro e escuro.
+
+- **Gatilhos:** interruptor corrigido (a bolinha saía do trilho por herdar o estilo de
+  botão). Cada gatilho em blocos: título, palavras e as respostas públicas num quadro
+  "em rodízio", sem o emoji quebrar sozinho na linha de baixo. Gatilho de texto curto
+  não fica mais desalinhado. "Adicionar resposta pública" virou botão secundário.
+- **Painéis de passo:** caixas de seleção no tema do app (a nativa saía cinza e
+  esticada). Opções rápidas e Ação com rótulo em cada campo ("Texto que a pessoa vê",
+  "Apelido da saída", "Marcação"). "Apagar este passo" com cara de ação destrutiva.
+- **Agendar:** seletor de data e hora no seu fuso, em vez de digitar ISO em UTC; avisa
+  quando a data já passou.
+- **Editor:** fluxo comprido abre a 75% no começo do fluxo, em vez de encolher até os
+  passos ficarem ilegíveis.
+- **Painel:** rádios e caixas no mesmo acabamento do editor; "Baixar histórico" numa
+  linha só no computador e em coluna no celular.
+
 ## 1.15.0 (2026-11-05)
 
 - **Link rastreado**: o funil do fluxo ganha a etapa *clicaram*. Por padrão o link
