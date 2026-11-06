@@ -120,7 +120,7 @@ def _int_env(nome, padrao=0):
 RETENCAO_LEADS_DIAS = _int_env("RETENCAO_LEADS_DIAS")
 RETENCAO_EVENTOS_DIAS = _int_env("RETENCAO_EVENTOS_DIAS")
 # Versão do produto. Sobe junto com mudança que o dono da instância percebe.
-VERSAO = "1.15.1"
+VERSAO = "1.16.0"
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -1425,7 +1425,7 @@ ROTULOS_LOG = {
     "fluxo_lido": "Mensagem lida", "fluxo_split": "Divisão A/B",
     "private_reply": "Resposta no direct", "dm_reply": "Resposta na DM",
     "public_reply": "Resposta pública", "public_reply_pulada": "Resposta pública pulada",
-    "sem_keyword": "Sem palavra-chave", "envio_adiado": "Envio adiado",
+    "sem_keyword": "Sem palavra-chave", "fluxo_desligado": "Pediram, mas o fluxo está desligado", "envio_adiado": "Envio adiado",
     "fora_da_janela": "Fora da janela de 24h", "throttle_meta": "Meta pediu pausa",
     "oauth_ok": "Conta conectada", "oauth_erro": "Erro ao conectar",
     "subscribe_webhooks": "Assinatura do webhook", "token_refresh": "Renovação do token",
@@ -1450,7 +1450,7 @@ GRUPOS_LOG = {
     "fluxos": ("fluxo_inicio", "fluxo_postback", "fluxo_quick_reply", "fluxo_resposta",
                "fluxo_lido", "fluxo_split", "sem_keyword", "link_clique",
                "deixou_de_seguir", "voltou_a_seguir", "reconsulta_seguidores",
-               "seguidor_liberado"),
+               "seguidor_liberado", "fluxo_desligado"),
     "webhooks": ("webhook", "webhook_recusado", "webhook_sem_conta", "subscribe_webhooks"),
     "conta": ("oauth_ok", "oauth_erro", "token_refresh", "token_invalido",
               "config_alterada", "senha_definida", "login_falhou", "login_por_http",
@@ -1793,6 +1793,7 @@ def importar_contatos(account_id, linhas, tag: str = "") -> dict:
         lead = db.lead_por_wa(account_id, numero, (nome or "").strip(), whatsapp.variantes(numero),
                               trocar_wa_id=False)
         db.registrar_optin(lead["id"], "importacao")
+        db.marca_funil(lead["id"])     # importou de propósito: é lead
         if tag:
             db.add_tag(lead["id"], tag)
         saida["importados"] += 1
@@ -1883,6 +1884,7 @@ async def importar_post(request: Request):
                 resultado["conflitos"] += 1
                 continue
             db.registrar_optin(lead["id"], "importacao")
+            db.marca_funil(lead["id"])     # importou de propósito: é lead
             if tag:
                 db.add_tag(lead["id"], tag)
             resultado["vinculados"] += 1

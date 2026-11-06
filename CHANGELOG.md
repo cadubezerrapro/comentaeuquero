@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.16.0 (2026-11-06)
+
+- **Lead é só quem entrou num funil.** Direct comum, leitura de mensagem e clique em
+  botão de mensagem antiga não criam lead nem consultam o perfil na Meta (menos
+  chamadas de API). Lead nasce quando um fluxo ligado começa e ganha
+  `entrou_funil_em`. Leads, CSV, contadores do topo e "Leads capturados" do painel
+  contam só esses.
+- Migração: quem já passou por um fluxo (ou foi importado de planilha) vira lead com a
+  data da primeira sessão. Contato antigo de direct comum some das listas, mas não é
+  apagado.
+- Coluna **Palavra** preenchida também para quem pediu pelo direct, com a palavra que
+  a pessoa usou de fato (antes ficava vazia no direct e era sempre a primeira da lista
+  no comentário).
+- Novo evento **"Pediram, mas o fluxo está desligado"** nos logs: comentário ou direct
+  com a palavra de um fluxo desligado aparecia como "sem palavra-chave".
+- Lista de fluxos diz "desligado", como o editor (antes dizia "pausado").
+
 ## 1.15.1 (2026-11-05)
 
 Acabamento da interface, revisado tela a tela nos temas claro e escuro.

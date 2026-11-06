@@ -257,6 +257,9 @@ def match_trigger(account_id, tipo, texto, media_id=None):
 
 
 def _lead_de(account, igsid, username="", keyword=""):
+    """Cria (ou atualiza) o lead e busca o perfil na Meta. Só pra quem vai entrar num
+    fluxo: direct comum, leitura e comentário sem fluxo ligado não chegam aqui, então
+    não viram lead nem gastam consulta de perfil (1.16.0)."""
     lead = db.touch_lead(account["id"], str(igsid), keyword, username)
     if not lead["enriched"]:
         perfil = instagram.fetch_profile(account, igsid)
@@ -264,6 +267,47 @@ def _lead_de(account, igsid, username="", keyword=""):
             db.enrich_lead(account["id"], lead["igsid"], perfil)
             lead = db.get_lead(lead["id"])
     return lead
+
+
+def _existente(account, igsid):
+    """O contato se ele já existe, com a interação contada. Nunca cria."""
+    if not db.lead_por_igsid(account["id"], igsid):
+        return None
+    return db.touch_lead(account["id"], str(igsid))
+
+
+def _palavra_que_casou(gatilho, texto) -> str:
+    """A palavra do gatilho que o texto usou: é a que aparece na coluna Palavra."""
+    alvo = _Texto(texto)
+    for k in gatilho.get("keywords") or []:
+        if _casa(k, alvo):
+            return k
+    return ""
+
+
+def _avisa_se_desligado(account, tipo, texto, media_id, quem) -> bool:
+    """Ninguém ligado casou. Se a palavra é de um fluxo DESLIGADO, registra isso
+    (em vez de "sem palavra-chave", que esconde o motivo) e devolve True."""
+    alvo = _Texto(texto)
+    for t in db.triggers_de_fluxos_desligados(account["id"], tipo):
+        if t["media_ids"] and str(media_id or "") not in [str(m) for m in t["media_ids"]]:
+            continue
+        if t["keywords"] and _forca(t["keywords"], texto, alvo):
+            db.log_event("fluxo_desligado", account["id"], t.get("flow_name", ""), tipo, False,
+                         quem, {"flow_id": t["flow_id"], "text": (texto or "")[:200]})
+            return True
+    return False
+
+
+def _fluxo_ligado(account, gatilho, origem, quem):
+    """O fluxo do gatilho, se ele está ligado. Desligado: registra no log (o dono vê
+    que chegou gente pedindo) e não cria lead nenhum."""
+    flow = db.get_flow(gatilho["flow_id"])
+    if flow and flow["active"]:
+        return flow
+    db.log_event("fluxo_desligado", account["id"], (flow or {}).get("name", ""), origem, False,
+                 quem, {"flow_id": gatilho["flow_id"]})
+    return None
 
 
 def process_payload(payload: dict) -> None:
@@ -312,7 +356,9 @@ def _trata_messaging(account, event, meus_ids):
     # "leram" do funil. Guardado com o nome do fluxo pra atribuir à métrica certa,
     # que o evento de leitura não carrega sozinho.
     if event.get("read") and not event.get("message"):
-        lead = _lead_de(account, remetente)
+        lead = db.lead_por_igsid(account["id"], remetente)
+        if not lead or not lead.get("entrou_funil_em"):
+            return          # leitura de conversa comum: não é métrica de fluxo
         db.log_event("fluxo_lido", account["id"], db.flow_name_do_lead(lead["id"]), "leitura",
                      True, lead.get("username") or remetente, {})
         return
@@ -323,7 +369,11 @@ def _trata_messaging(account, event, meus_ids):
         mid = postback.get("mid") or f"pb:{remetente}:{postback.get('payload')}"
         if not db.claim(mid):
             return
-        lead = _lead_de(account, remetente)
+        lead = _existente(account, remetente)
+        if not lead:        # botão de mensagem antiga, de antes do banco atual
+            db.log_event("fluxo_postback", account["id"], "", "botao", False, remetente,
+                         {"motivo": "sem_lead", "payload": postback.get("payload", "")})
+            return
         motivo = (runtime.resume_postback(account, lead, postback.get("payload", ""))
                   if _sessao_ig(lead) else "sem_sessao_esperando")
         db.log_event("fluxo_postback", account["id"], db.flow_name_do_lead(lead["id"]), "botao",
@@ -341,7 +391,11 @@ def _trata_messaging(account, event, meus_ids):
     # clique em quick reply chega como mensagem com payload
     quick = (msg.get("quick_reply") or {}).get("payload")
     if quick:
-        lead = _lead_de(account, remetente)
+        lead = _existente(account, remetente)
+        if not lead:
+            db.log_event("fluxo_quick_reply", account["id"], "", "quick_reply", False, remetente,
+                         {"motivo": "sem_lead", "payload": quick})
+            return
         motivo = (runtime.resume_postback(account, lead, quick)
                   if _sessao_ig(lead) else "sem_sessao_esperando")
         db.log_event("fluxo_quick_reply", account["id"], db.flow_name_do_lead(lead["id"]),
@@ -353,12 +407,14 @@ def _trata_messaging(account, event, meus_ids):
     if not texto:
         return
 
-    lead = _lead_de(account, remetente)
+    # direct comum não vira lead: só quem já é contato (pode estar no meio de um
+    # fluxo) ou quem mandou a palavra de um fluxo ligado
+    lead = _existente(account, remetente)
 
     # se a pessoa estava parada num nó esperando resposta, o texto é a resposta.
     # isso vem ANTES do match de gatilho: quem está no meio de um fluxo não recomeça
     # do zero por ter escrito uma palavra-chave sem querer.
-    sessao = _sessao_ig(lead)
+    sessao = _sessao_ig(lead) if lead else None
     if sessao and sessao.get("waiting_for") == "text":
         motivo = runtime.resume_text(account, lead, texto)
         db.log_event("fluxo_resposta", account["id"], db.flow_name_do_lead(lead["id"]),
@@ -367,8 +423,13 @@ def _trata_messaging(account, event, meus_ids):
 
     origem = "story_reply" if (msg.get("reply_to") or {}).get("story") else "dm"
     gatilho = match_trigger(account["id"], origem, texto)
+    quem = (lead or {}).get("username") or remetente
     if not gatilho:
+        _avisa_se_desligado(account, origem, texto, None, quem)
         return
+    if not _fluxo_ligado(account, gatilho, origem, quem):
+        return
+    lead = _lead_de(account, remetente, keyword=_palavra_que_casou(gatilho, texto))
     _dispara(account, gatilho, lead, origem, texto)
 
 
@@ -384,13 +445,16 @@ def _trata_comentario(account, value, meus_ids, tipo):
     media_id = (value.get("media") or {}).get("id")
     gatilho = match_trigger(account["id"], tipo, texto, media_id)
     if not gatilho:
+        if _avisa_se_desligado(account, tipo, texto, media_id, autor.get("username", "")):
+            return
         db.log_event("sem_keyword", account["id"], "", tipo, None,
                      autor.get("username", ""), {"text": texto[:200], "media": media_id})
         return
 
+    if not _fluxo_ligado(account, gatilho, tipo, autor.get("username", "")):
+        return
     lead = _lead_de(account, autor.get("id") or autor.get("username", ""),
-                    autor.get("username", ""),
-                    gatilho["keywords"][0] if gatilho["keywords"] else "")
+                    autor.get("username", ""), _palavra_que_casou(gatilho, texto))
     _dispara(account, gatilho, lead, tipo, texto, comment_id=comment_id)
 
 

@@ -371,6 +371,9 @@ def init():
         # vez e quando a pessoa passou de seguidor pra não seguidor
         "ALTER TABLE leads ADD COLUMN seguidor_checado_em TEXT DEFAULT ''",
         "ALTER TABLE leads ADD COLUMN deixou_de_seguir_em TEXT DEFAULT ''",
+        # lead de verdade (1.16.0): quando a pessoa entrou num funil. Contato que só
+        # mandou direct comum fica vazio e não aparece em Leads, CSV nem contadores
+        "ALTER TABLE leads ADD COLUMN entrou_funil_em TEXT DEFAULT ''",
         # índice depois dos ALTERs: em banco antigo a coluna wa_id só existe agora
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_wa ON leads(account_id, wa_id) "
         "WHERE wa_id <> ''",
@@ -379,6 +382,14 @@ def init():
             conn().execute(ddl)
         except sqlite3.OperationalError:
             conn().rollback()  # coluna já existe; sem o rollback a transação fica aberta
+    # Quem já passou por um fluxo antes da 1.16.0 é lead: data da primeira sessão.
+    # Importado de planilha também (o dono pôs na lista de propósito). Idempotente:
+    # só mexe em quem ainda está vazio.
+    conn().execute(
+        """UPDATE leads SET entrou_funil_em = COALESCE(
+               (SELECT MIN(s.created_at) FROM flow_sessions s WHERE s.lead_id = leads.id),
+               CASE WHEN wa_optin_origem = 'importacao' THEN wa_optin_em END, '')
+           WHERE COALESCE(entrou_funil_em, '') = ''""")
     conn().commit()
     migrate_rules_to_flows()
     try:
@@ -990,6 +1001,12 @@ ORDENS_LEADS = {
 }
 
 
+# Lead = quem entrou num funil (ver entrou_funil_em). Filtro usado em toda lista e
+# contagem que o dono vê; o contato de direct comum continua de fora.
+NO_FUNIL = "COALESCE(entrou_funil_em,'')<>''"
+NO_FUNIL_L = "COALESCE(l.entrou_funil_em,'')<>''"      # mesma regra, tabela com alias l
+
+
 def list_leads(account_id, limit=200, keyword=None, segue=None, busca=None,
                ordem="recente", tag=None, desde=None, ate=None, offset=0):
     """Leads com filtro. Cada filtro é opcional e eles se combinam.
@@ -1000,7 +1017,7 @@ def list_leads(account_id, limit=200, keyword=None, segue=None, busca=None,
     tag:     só quem tem a etiqueta
     desde/ate: ISO UTC, recorte pela primeira interação (first_ts)
     """
-    onde, args = ["account_id=?"], [account_id]
+    onde, args = ["account_id=?", NO_FUNIL], [account_id]
     if tag:
         onde.append("EXISTS (SELECT 1 FROM lead_tags t WHERE t.lead_id=leads.id AND t.tag=?)")
         args.append(tag)
@@ -1030,20 +1047,35 @@ def list_leads(account_id, limit=200, keyword=None, segue=None, busca=None,
 def leads_resumo(account_id) -> dict:
     """Números do topo da página e as palavras disponíveis pra filtrar."""
     c = conn()
-    total = c.execute("SELECT COUNT(*) FROM leads WHERE account_id=?",
+    total = c.execute(f"SELECT COUNT(*) FROM leads WHERE account_id=? AND {NO_FUNIL}",
                       (account_id,)).fetchone()[0]
     seguidores = c.execute(
-        "SELECT COUNT(*) FROM leads WHERE account_id=? AND is_follower=1",
+        f"SELECT COUNT(*) FROM leads WHERE account_id=? AND is_follower=1 AND {NO_FUNIL}",
         (account_id,)).fetchone()[0]
     palavras = [(r["k"], r["n"]) for r in c.execute(
-        """SELECT last_keyword k, COUNT(*) n FROM leads
-           WHERE account_id=? AND last_keyword != ''
+        f"""SELECT last_keyword k, COUNT(*) n FROM leads
+           WHERE account_id=? AND last_keyword != '' AND {NO_FUNIL}
            GROUP BY last_keyword ORDER BY n DESC""", (account_id,))]
     return {"total": total, "seguidores": seguidores, "palavras": palavras}
 
 
 def leads_count(account_id):
-    return conn().execute("SELECT COUNT(*) FROM leads WHERE account_id=?", (account_id,)).fetchone()[0]
+    return conn().execute(f"SELECT COUNT(*) FROM leads WHERE account_id=? AND {NO_FUNIL}",
+                          (account_id,)).fetchone()[0]
+
+
+def marca_funil(lead_id) -> None:
+    """A pessoa entrou num funil: a partir daqui é lead. Primeira vez vale."""
+    conn().execute("UPDATE leads SET entrou_funil_em=? WHERE id=? AND COALESCE(entrou_funil_em,'')=''",
+                   (now_iso(), lead_id))
+    conn().commit()
+
+
+def lead_por_igsid(account_id, igsid):
+    """O contato, se já existe. Não cria: quem só mandou direct comum não vira linha."""
+    r = conn().execute("SELECT * FROM leads WHERE account_id=? AND igsid=?",
+                       (account_id, str(igsid))).fetchone()
+    return dict(r) if r else None
 
 
 def leads_by_who(account_id):
@@ -1264,6 +1296,15 @@ def active_triggers(account_id, type_=None):
         q += " AND t.type=?"
         args.append(type_)
     return [_trigger_row(r) for r in conn().execute(q + " ORDER BY t.id", args)]
+
+
+def triggers_de_fluxos_desligados(account_id, type_):
+    """Gatilhos ligados cujo fluxo está desligado: só pra avisar no log que chegou
+    gente pedindo. O motor nunca dispara por eles."""
+    return [_trigger_row(r) for r in conn().execute(
+        """SELECT t.*, f.name AS flow_name FROM triggers t JOIN flows f ON f.id = t.flow_id
+           WHERE f.account_id=? AND f.active=0 AND t.active=1 AND t.type=? ORDER BY t.id""",
+        (account_id, type_))]
 
 
 # ---------- sessões de fluxo ----------
@@ -2207,7 +2248,7 @@ def leads_para_reconsultar(account_id, tags, limite) -> list:
     perceber se voltou). Primeiro quem está há mais tempo sem conferir.
 
     tags vazio = qualquer lead; senão, só quem tem uma das etiquetas."""
-    onde = ["l.account_id=?", f"l.igsid NOT LIKE '{PREFIXO_SO_WA}%'",
+    onde = ["l.account_id=?", f"l.igsid NOT LIKE '{PREFIXO_SO_WA}%'", "COALESCE(l.entrou_funil_em,'')<>''",
             "(l.is_follower=1 OR EXISTS (SELECT 1 FROM lead_tags d WHERE d.lead_id=l.id "
             "AND d.tag='deixou_de_seguir'))"]
     args = [account_id]

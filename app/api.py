@@ -582,18 +582,19 @@ def campos_capturados(desde: str = "", ate: str = "", tz: float = -3):
     args = [conta["id"]]
     onde = _janela(desde, ate, fuso, args, col="l.first_ts")
     total = db.conn().execute(
-        f"SELECT COUNT(*) FROM leads l WHERE l.account_id=?{onde}", args).fetchone()[0]
+        f"SELECT COUNT(*) FROM leads l WHERE l.account_id=? AND {db.NO_FUNIL_L}{onde}",
+        args).fetchone()[0]
     args2 = [conta["id"]]
     onde2 = _janela(desde, ate, fuso, args2, col="l.first_ts")
     por_campo = [{"campo": r["key"], "leads": r["n"]} for r in db.conn().execute(
         f"""SELECT f.key, COUNT(DISTINCT f.lead_id) n FROM lead_fields f
             JOIN leads l ON l.id = f.lead_id
-            WHERE l.account_id=? AND TRIM(f.value) <> ''{onde2}
+            WHERE l.account_id=? AND {db.NO_FUNIL_L} AND TRIM(f.value) <> ''{onde2}
             GROUP BY f.key ORDER BY n DESC""", args2)]
     args3 = [conta["id"]]
     onde3 = _janela(desde, ate, fuso, args3, col="l.first_ts")
     completos = db.conn().execute(
-        f"""SELECT COUNT(*) FROM leads l WHERE l.account_id=?{onde3}
+        f"""SELECT COUNT(*) FROM leads l WHERE l.account_id=? AND {db.NO_FUNIL_L}{onde3}
             AND EXISTS (SELECT 1 FROM lead_fields f WHERE f.lead_id=l.id
                         AND f.key IN ('nome','name') AND TRIM(f.value)<>'')
             AND EXISTS (SELECT 1 FROM lead_fields f WHERE f.lead_id=l.id
@@ -627,8 +628,8 @@ def listar_leads(desde: str = "", ate: str = "", tz: float = -3, campo: str = ""
     fuso = _fuso(tz)
     args = [conta["id"]]
     sql = ("SELECT l.id, l.username, l.name, l.followers, l.is_follower, l.first_ts, "
-           "l.last_ts, l.interactions, l.last_keyword, l.deixou_de_seguir_em "
-           "FROM leads l WHERE l.account_id=?")
+           "l.last_ts, l.interactions, l.last_keyword, l.deixou_de_seguir_em, "
+           "l.entrou_funil_em FROM leads l WHERE l.account_id=? AND " + db.NO_FUNIL_L)
     sql += _janela(desde, ate, fuso, args, col="l.first_ts")
     if keyword:
         sql += " AND l.last_keyword=?"
@@ -700,7 +701,8 @@ def exportar_csv(tipo: str = "historico", desde: str = "", ate: str = "", tz: fl
         linhas = listar_leads(desde=desde, ate=ate, tz=tz, campo=flow, limit=limit)
         chaves = sorted({k for l in linhas for k in l["campos"]})
         fixas = ["username", "name", "first_ts", "last_ts", "last_keyword",
-                 "followers", "is_follower", "deixou_de_seguir_em", "interactions"]
+                 "followers", "is_follower", "deixou_de_seguir_em", "entrou_funil_em",
+                 "interactions"]
         w.writerow(fixas + chaves)
         for l in linhas:
             w.writerow([l.get(c, "") for c in fixas] + [l["campos"].get(k, "") for k in chaves])

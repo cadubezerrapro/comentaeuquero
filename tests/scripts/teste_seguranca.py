@@ -215,6 +215,7 @@ def testa_csv(sessao, acc):
               "555": "+cmd|' /C calc'!A0", "666": "Maria Clara"}
     for igsid, nome in perfis.items():
         lead = db.touch_lead(acc["id"], igsid, "kw", f"user{igsid}")
+        db.marca_funil(lead["id"])
         db.enrich_lead(acc["id"], igsid, {"username": f"user{igsid}", "name": nome,
                                           "profile_pic": "", "follower_count": 1,
                                           "is_user_follow_business": True})

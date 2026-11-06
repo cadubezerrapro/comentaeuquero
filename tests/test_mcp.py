@@ -413,6 +413,7 @@ def test_editar_ligar_gatilho_e_ver(conta_ig):
     F.adicionar_gatilho(fid, "story", ["mentoria"])
     assert [t["type"] for t in db.list_triggers(fid)] == ["comment", "story_reply"]
     lead = db.touch_lead(conta_ig["id"], "ig-1", "mentoria", "fulana")
+    db.marca_funil(lead["id"])     # entrou no fluxo, como o runtime.start faria
     db.log_event("fluxo_inicio", conta_ig["id"], "Mentoria", "comment", True, "fulana", {"flow_id": fid})
     db.log_event("fluxo_envio", conta_ig["id"], "Mentoria", "text", True, "fulana", {"node": "n1"})
     v = F.ver_fluxo(fid)
@@ -515,6 +516,7 @@ def test_leads_filtros_paginacao_e_etiqueta(conta_ig):
     ids = []
     for i in range(5):
         ids.append(db.touch_lead(conta_ig["id"], f"p{i}", "ebook" if i % 2 else "aula", f"pessoa{i}")["id"])
+        db.marca_funil(ids[-1])
     F.etiquetar_lead(ids[0], adicionar=["comprador", "vip"])
     F.etiquetar_lead(ids[0], remover=["vip"])
     assert db.lead_tags(ids[0]) == ["comprador"]

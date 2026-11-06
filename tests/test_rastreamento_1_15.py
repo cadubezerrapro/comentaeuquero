@@ -208,6 +208,7 @@ def conta(monkeypatch):
 
 def _lead(conta, igsid, segue=1, tag="isca_viral"):
     l = db.touch_lead(conta["id"], igsid, "", f"u{igsid}")
+    db.marca_funil(l["id"])
     db.conn().execute("UPDATE leads SET is_follower=? WHERE id=?", (segue, l["id"]))
     db.conn().commit()
     if tag:

@@ -1254,6 +1254,7 @@ def start(account, flow, lead, comment_id=None, context=None, canal="ig"):
         window_expires_at=db.in_seconds_iso(JANELA_S),
         context=context or {}, canal=canal)
     db.abrir_janela(lead["id"], canal)
+    db.marca_funil(lead["id"])      # entrou num fluxo: daqui em diante é lead
     return _run(account, session_id, entry_node_id(flow), comment_id=comment_id)
 
 

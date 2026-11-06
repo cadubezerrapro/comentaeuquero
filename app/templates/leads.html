@@ -10,7 +10,7 @@
 <div class="cabeca">
     <div>
       <h1>Leads</h1>
-      <p class="sub" style="margin:0;">Quem pediu seu link, com o perfil do Instagram.{% if wa_ativo() %} · <a href="/leads/importar">Importar contatos</a>{% endif %}</p>
+      <p class="sub" style="margin:0;">Quem entrou num fluxo (comentou ou mandou a palavra), com o perfil do Instagram. Direct comum não entra aqui.{% if wa_ativo() %} · <a href="/leads/importar">Importar contatos</a>{% endif %}</p>
     </div>
     <div class="resumo">
       <div><span class="num">{{ resumo.total }}</span><span class="rot">no total</span></div>
@@ -116,7 +116,7 @@
     {% if retencao_dias %}Leads parados há mais de {{ retencao_dias }} dias são apagados
     automaticamente, junto com tags e campos capturados.
     {% else %}Os leads ficam guardados por tempo indeterminado. Pra apagar sozinho os
-    antigos, defina <code>RETENCAO_LEADS_DIAS</code> no .env.{% endif %}
+    antigos, defina <code>RETENCAO_LEADS_DIAS</code> nas variáveis do servidor.{% endif %}
   </p>
   {% elif filtros.keyword or filtros.segue or filtros.busca %}
   <div class="vazio"><p class="vazio-t">Nenhum lead com esse filtro</p><p class="sub"><a href="/leads">Ver todos</a></p></div>
