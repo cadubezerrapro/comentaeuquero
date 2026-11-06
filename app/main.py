@@ -120,7 +120,7 @@ def _int_env(nome, padrao=0):
 RETENCAO_LEADS_DIAS = _int_env("RETENCAO_LEADS_DIAS")
 RETENCAO_EVENTOS_DIAS = _int_env("RETENCAO_EVENTOS_DIAS")
 # Versão do produto. Sobe junto com mudança que o dono da instância percebe.
-VERSAO = "1.16.0"
+VERSAO = "1.17.0"
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -619,7 +619,11 @@ def link_rastreado(token: str, request: Request):
         link, _ = db.registrar_clique(token, via="redirecionar")
     if not link:
         return PlainTextResponse("link não encontrado", status_code=404, headers=_SEM_CACHE)
-    return RedirectResponse(link["url"], status_code=302, headers=_SEM_CACHE)
+    destino = link["url"]
+    if links.item_do_link(destino) and links.segredo_magico():
+        # material do ia_thefuture: chega lá já liberado pra esta pessoa
+        destino = links.com_magico(links.com_parametro(destino, token), token)
+    return RedirectResponse(destino, status_code=302, headers=_SEM_CACHE)
 
 
 def _cors_visto(request: Request) -> dict:

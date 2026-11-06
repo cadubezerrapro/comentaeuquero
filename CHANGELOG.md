@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.17.0 (2026-11-06)
+
+- **Link mágico:** com `LINK_MAGICO_SEGREDO` (o mesmo na Vercel do ia_thefuture), link
+  do funil pra um material (`#item-<id>`) sai assinado pra pessoa que pediu:
+  `?ceq=<token>&mg=<validade>.<HMAC>`. O site libera só aquele material, sem login, até
+  a validade (`LINK_MAGICO_DIAS`, padrão 30). Funciona nos modos `parametro` e
+  `redirecionar`. Sem o segredo, nada muda.
+- Busca de Leads acha a pessoa pelo código do link (`ceq`): é como se descobre quem
+  repassou um link.
+
 ## 1.16.0 (2026-11-06)
 
 - **Lead é só quem entrou num funil.** Direct comum, leitura de mensagem e clique em

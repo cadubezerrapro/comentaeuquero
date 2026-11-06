@@ -26,8 +26,11 @@ Regras que valem nos dois modos:
   a pessoa. Ele só não conta como clique.
 - O token é aleatório e não leva dado do lead.
 """
+import hashlib
+import hmac
 import os
 import re
+import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from . import db
@@ -80,6 +83,51 @@ def com_parametro(url, token) -> str:
     return urlunsplit((p.scheme, p.netloc, p.path, urlencode(query), p.fragment))
 
 
+# ---------- link mágico (1.17.0) ----------
+# Link do funil pra um material do ia_thefuture (`#item-<id>`) sai assinado pra
+# pessoa que pediu: ?ceq=<token>&mg=<expira>.<assinatura>. O site confere a
+# assinatura com o mesmo segredo e libera SÓ aquele item, sem login, até expirar.
+# O resto do site continua pedindo cadastro. Sem o segredo, nada muda.
+RE_ITEM = re.compile(r"^item-([A-Za-z0-9_-]{1,80})$")
+PARAMETRO_MAGICO = "mg"
+
+
+def segredo_magico() -> str:
+    return (os.environ.get("LINK_MAGICO_SEGREDO", "") or "").strip()
+
+
+def dias_magico() -> int:
+    try:
+        return max(1, int(os.environ.get("LINK_MAGICO_DIAS", "") or 30))
+    except ValueError:
+        return 30
+
+
+def item_do_link(url) -> str:
+    m = RE_ITEM.match(urlsplit(url).fragment or "")
+    return m.group(1) if m else ""
+
+
+def assinatura_magica(token, item, expira, segredo=None) -> str:
+    """HMAC-SHA256 de "<token>.<item>.<expira>" em hex. O ia_thefuture calcula igual."""
+    chave = (segredo if segredo is not None else segredo_magico()).encode()
+    return hmac.new(chave, f"{token}.{item}.{expira}".encode(), hashlib.sha256).hexdigest()
+
+
+def com_magico(url, token, agora=None) -> str:
+    """Acrescenta mg=<expira>.<assinatura> ao link que já tem ?ceq=<token>. Só pra
+    material (#item-...) e com segredo configurado; senão devolve igual."""
+    item, segredo = item_do_link(url), segredo_magico()
+    if not item or not segredo or not token:
+        return url
+    expira = int((agora or time.time()) + dias_magico() * 86400)
+    p = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(p.query, keep_blank_values=True)
+             if k != PARAMETRO_MAGICO]
+    query.append((PARAMETRO_MAGICO, f"{expira}.{assinatura_magica(token, item, expira, segredo)}"))
+    return urlunsplit((p.scheme, p.netloc, p.path, urlencode(query), p.fragment))
+
+
 def rastrear(url, account_id, lead, flow_name, node_id) -> str:
     """O link que vai na mensagem. Devolve a própria url quando não há o que rastrear."""
     url = (url or "").strip()
@@ -96,7 +144,8 @@ def rastrear(url, account_id, lead, flow_name, node_id) -> str:
     if m == "parametro":
         if not dominio_liberado(url):
             return url
-        return com_parametro(url, db.token_link(account_id, lead["id"], flow_name, node_id, url))
+        token = db.token_link(account_id, lead["id"], flow_name, node_id, url)
+        return com_magico(com_parametro(url, token), token)
     # redirecionar
     if not base.startswith("https://"):
         return url                       # sem domínio público https, não tem pra onde

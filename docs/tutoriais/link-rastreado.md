@@ -49,6 +49,21 @@ No HTML do site de destino, antes do `</body>` (troque o endereço pelo da sua i
 
 O aviso só é aceito vindo de um domínio de `CEQ_LINK_DOMINIOS`. Abrir de novo dentro de 30 minutos não conta como outro clique. O robô de prévia da Meta não roda JavaScript, então não infla a contagem.
 
+### Link mágico (material liberado só pra quem pediu)
+
+Com `LINK_MAGICO_SEGREDO` igual no servidor do comenta EU QUERO e na Vercel do ia_thefuture, o link de um material (`…/#item-<id>`) sai assim:
+
+```
+https://ia-thefuture.vercel.app/?ceq=Xk3v9QpL2aZb&mg=1767225600.9f2c…#item-tut-clonar-viral
+```
+
+- `mg` = validade (segundos desde 1970) + HMAC-SHA256 de `<ceq>.<item>.<validade>` com o segredo.
+- O site confere a assinatura e libera **só aquele material**, sem login, até a validade (`LINK_MAGICO_DIAS`, padrão 30). O resto continua pedindo cadastro.
+- Cada pessoa recebe o seu (o `ceq` é dela). Mexer no item, no código ou na data invalida o link.
+- Achou um link repassado? Cole o código `ceq` na busca de **Leads**: aparece quem recebeu.
+
+Gerar um segredo (no CMD, com Python instalado): `python -c "import secrets; print(secrets.token_urlsafe(32))"`. Coloque o mesmo valor nos dois lados e não mande pra ninguém.
+
 ### Modo `redirecionar` (opcional)
 
 `CEQ_LINK_RASTREADO=redirecionar` faz o link passar por `BASE_URL/r/<token>`, que conta e manda (302) para o destino. Funciona com qualquer site, sem colar nada, mas é o formato que os filtros olham com mais desconfiança. Se usar, prefira `BASE_URL` num [domínio próprio](./dominio-proprio.md). O robô de prévia recebe o mesmo destino que a pessoa (entregar outra coisa para ele seria cloaking); ele só não conta.

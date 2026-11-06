@@ -1034,9 +1034,12 @@ def list_leads(account_id, limit=200, keyword=None, segue=None, busca=None,
         onde.append("is_follower=?")
         args.append(segue)
     if busca:
-        onde.append("(LOWER(username) LIKE ? OR LOWER(name) LIKE ?)")
+        # também acha pelo código do link (o ?ceq= que o site mostra): é assim que
+        # se descobre quem repassou um link mágico
+        onde.append("(LOWER(username) LIKE ? OR LOWER(name) LIKE ? OR EXISTS ("
+                    "SELECT 1 FROM links_rastreados k WHERE k.lead_id=leads.id AND k.token=?))")
         alvo = f"%{busca.lower().strip().lstrip('@')}%"
-        args += [alvo, alvo]
+        args += [alvo, alvo, busca.strip()]
     ordenacao = ORDENS_LEADS.get(ordem, ORDENS_LEADS["recente"])
     args += [limit, max(0, int(offset or 0))]
     return [dict(r) for r in conn().execute(
